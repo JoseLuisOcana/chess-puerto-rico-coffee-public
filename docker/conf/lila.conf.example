@@ -57,7 +57,7 @@ streamer.twitch.secret = "twitch-secret"
 
 hcaptcha.enabled = false
 hcaptcha.public_key = "10000000-ffff-ffff-ffff-000000000001"
-hcaptcha.private_key = "0x0000000000000000000000000000000000000000"
+hcaptcha.private_key = "CHANGEME_HCAPTCHA_PRIVATE_KEY"
 
 # Task 6+7: Opening explorer + tablebase via public lichess endpoints
 explorer.internal_endpoint = "https://explorer.lichess.ovh"

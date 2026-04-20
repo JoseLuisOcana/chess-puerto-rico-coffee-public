@@ -18,6 +18,9 @@ source-disclosure requirements.
 - **Caddyfile** (`caddy/Caddyfile`): Modified WebSocket matcher to use
   case-insensitive regex (`header_regexp Connection (?i)upgrade`) to fix
   connections not matching lowercase `Upgrade:` headers from nginx.
+- **mono-caddy.conf** (`caddy/mono-caddy.conf`): Alternative Caddy
+  config for single-container "mono" deployment mode. Not currently
+  active; kept for reference and completeness of the deployment source.
 - **nginx configs** (`nginx/`): Custom reverse-proxy config for the
   domain, plus a parallel system config file required by Plesk.
 - **robots.txt** (`public/robots.txt`): Changed from upstream default
@@ -60,9 +63,9 @@ and the accompanying `.upstream.diff` for the exact changes.
 
 ## Upstream versions
 
-The deployment tracks the upstream Lichess repositories. Exact commit
-SHAs of the running version are recorded in `docker/versions.txt`,
-updated after each deployment (when present).
+The deployment tracks the upstream Lichess repositories directly from
+github.com/lichess-org. For the exact upstream commit currently deployed,
+consult the docker-compose image tags in `docker/compose.yml`.
 
 ---
 
