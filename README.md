@@ -51,7 +51,7 @@ by AGPL-3.0.
 - Ubuntu 22.04 on IONOS VPS
 - Plesk Obsidian 18.x for domain management
 - Docker Compose orchestration via lila-docker
-- Active profiles: base, stockfish-play, stockfish-analysis, search, gifs
+- Active profiles: base, stockfish-play, stockfish-analysis, search, gifs, external-engine, push, thumbnails, email
 
 ## License
 

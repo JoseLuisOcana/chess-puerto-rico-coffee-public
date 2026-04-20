@@ -29,8 +29,20 @@ source-disclosure requirements.
   search indexing.
 - **compose.yml** / **compose-search.yml** (`docker/`): Environment
   variable overrides for domain, URL, mail settings, and service
-  profiles. Sensitive values replaced with placeholders in the
-  `.env.example` and `lila.conf.example` templates.
+  profiles. Active profiles: base, stockfish-play, stockfish-analysis,
+  search, gifs, external-engine, push, thumbnails, email. Elasticsearch
+  heap reduced from the upstream default to `-Xms512m -Xmx512m` via
+  `ES_JAVA_OPTS` to fit the deployment's RAM budget. Sensitive values
+  replaced with placeholders in `.env.example` and `lila.conf.example`
+  templates.
+- **AGPL-3.0 attribution footer** (`nginx/snippets-chess-branding.conf`):
+  A `sub_filter` injection appends a visible footer on every page with
+  the text "This site is a modified version of Lichess, licensed under
+  AGPL-3.0" and a clickable link to this public source-code repository
+  (github.com/JoseLuisOcana/chess-puerto-rico-coffee-public). This is
+  how AGPL-3.0 source-disclosure is exposed to end users. External
+  anchor tags use `target="_blank" rel="noopener"` for security
+  (prevents `window.opener` access) and UX (links open in new tabs).
 
 ## 3. Custom utilities
 
@@ -69,4 +81,4 @@ consult the docker-compose image tags in `docker/compose.yml`.
 
 ---
 
-*Last updated: April 2026*
+*Last updated: April 2026 (revised)*
