@@ -25,6 +25,7 @@ by AGPL-3.0.
 
 | Path | Contents |
 |---|---|
+| `lila-modifications/` | Direct modifications to upstream lila Scala source code, mirroring the upstream directory structure |
 | `caddy/` | Modified Caddyfile with case-insensitive WebSocket matcher |
 | `docker/` | docker-compose overrides, sanitized .env example, sanitized lila.conf.example |
 | `nginx/` | Custom nginx configs (Plesk vhost + parallel system config, plus the branding sub_filter snippet) |

@@ -44,14 +44,19 @@ Custom HTML pages for the deployment:
 - `public/static/privacy.html`
 - `public/static/terms-of-service.html`
 
-## 5. No modifications to lila source code
+## 5. Direct modifications to lila source code
 
-As of this writing, no direct modifications have been made to the lila
-Scala source code. All customization is achieved through configuration,
-environment variables, and HTTP-level branding injection via nginx
-`sub_filter`. If direct source modifications are made in the future,
-they will be documented here and the modified source will be included
-in this repository.
+### modules/fishnet/src/main/FishnetPlayer.scala
+
+Reduced the AI opponent thinking delay to improve "Play vs Computer"
+responsiveness, especially on mobile devices:
+
+- `delayFactor`: 0.011f → 0.003f (~73% faster responses)
+- Opening move delay: 2 seconds → 1 second
+- Maximum delay cap: 5 seconds → 2 seconds
+
+See `lila-modifications/modules/fishnet/src/main/FishnetPlayer.scala`
+and the accompanying `.upstream.diff` for the exact changes.
 
 ## Upstream versions
 

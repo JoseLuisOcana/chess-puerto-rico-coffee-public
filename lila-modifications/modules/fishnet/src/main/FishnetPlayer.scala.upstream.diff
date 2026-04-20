@@ -1,0 +1,25 @@
+--- /tmp/FishnetPlayer.scala.upstream	2026-04-20 17:57:55.432129454 -0400
++++ /home/devuser/projects/chess-prcs-public/lila-modifications/modules/fishnet/src/main/FishnetPlayer.scala	2026-04-20 17:58:30.245311269 -0400
+@@ -28,11 +28,11 @@
+         logger.info(e.getMessage)
+       }
+ 
+-  private val delayFactor = 0.011f
++  private val delayFactor = 0.003f
+   private val defaultClock = Clock(Clock.LimitSeconds(300), Clock.IncrementSeconds(0))
+ 
+   private def delayFor(g: Game): Option[FiniteDuration] =
+-    if !g.bothPlayersHaveMoved then 2.seconds.some
++    if !g.bothPlayersHaveMoved then 1.seconds.some
+     else
+       for
+         pov <- g.aiPov
+@@ -41,7 +41,7 @@
+         if totalTime > 20 * 100
+         delay = (clock.remainingTime(pov.color).centis.atMost(totalTime)) * delayFactor
+         accel = 1 - ((g.ply.value - 20).atLeast(0).atMost(100)) / 150f
+-        sleep = (delay * accel).atMost(500)
++        sleep = (delay * accel).atMost(200)
+         if sleep > 25
+         millis = sleep * 10
+         randomized = millis + millis * (ThreadLocalRandom.nextDouble() - 0.5)
