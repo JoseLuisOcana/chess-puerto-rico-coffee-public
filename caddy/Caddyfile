@@ -1,0 +1,74 @@
+:80
+
+handle_path /oops* {
+	root * /lila/public/oops
+	file_server
+}
+
+# for http://localhost:8080/oops/font.html
+handle_path /font* {
+	root * /lila/public/font
+	file_server
+}
+
+# for http://localhost:8080/oops/flair.html
+handle_path /flair/list.txt {
+	root * /lila/public/flair/list.txt
+	file_server
+}
+
+handle_path /static* {
+	root * /static
+	file_server
+}
+
+handle_path /display* {
+	rewrite * /display
+	reverse_proxy picfit:3001
+}
+
+handle_path /embed/* {
+	rewrite * /embed{uri}
+	reverse_proxy lila:9663 {
+		header_up Host {$LILA_DOMAIN}
+		header_up Origin {$LILA_URL}
+
+		header_down Cross-Origin-Embedder-Policy "credentialless"
+	}
+}
+
+@websockets {
+	header_regexp Connection (?i)upgrade
+	header_regexp Upgrade (?i)websocket
+}
+
+reverse_proxy @websockets lila_ws:9664 {
+	header_up Origin {$LILA_URL}
+}
+
+reverse_proxy lila:9663 {
+	header_up Host {$LILA_DOMAIN}
+	header_up Origin {$LILA_URL}
+
+	# allow CORS for requests from web client on lichess.org/api
+	header_down Access-Control-Allow-Origin "*"
+
+	header_down Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+}
+
+handle_errors {
+	@502 expression {http.error.status_code} == 502
+
+	route @502 {
+		route /display* {
+			root * /static/errors
+			rewrite * /picfit-placeholder.png
+			file_server
+		}
+		route {
+			root * /static/errors
+			rewrite * /502.html
+			file_server
+		}
+	}
+}

@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /inbox
+Disallow: /setting
+Disallow: /account
+
+Sitemap: https://chesspuertoricocoffee.com/sitemap.xml

@@ -1,0 +1,44 @@
+--- /tmp/_upstream_lila.conf	2026-04-19 20:57:14.260171951 -0400
++++ /tmp/chess-prcs-public-staging/docker/conf/lila.conf.example	2026-04-19 20:57:14.240171526 -0400
+@@ -1,7 +1,11 @@
+ include "base"
+ include "version"
+ 
+-user.password.bpass.secret = "9qEYN0ThHer1KWLNekA76Q=="
++user.password.bpass.secret = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
++security.email_confirm.secret  = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
++security.password_reset.secret = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
++security.email_change.secret   = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
++security.login_token.secret    = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
+ 
+ net.site.name = "lila"
+ net.domain = ${?LILA_DOMAIN}
+@@ -21,11 +25,13 @@
+ memo.picfit.endpointGet = ${?LILA_URL}
+ memo.picfit.endpointPost = "http://picfit:3001"
+ 
+-mailer.primary.mock = ${?MOCK_EMAIL}
+-mailer.primary.tls = false
+-mailer.primary.host = "mailpit"
+-mailer.primary.port = 1025
+-mailer.primary.sender = "lichess.org <noreply@lichess.org>"
++mailer.primary.mock     = ${?MOCK_EMAIL}
++mailer.primary.tls      = true
++mailer.primary.host     = "smtp.ionos.com"
++mailer.primary.port     = 587
++mailer.primary.user     = "system@chesspuertoricocoffee.com"
++mailer.primary.password = ${?MAILER_PASSWORD}
++mailer.primary.sender   = "Chess Puerto Rico Coffee <system@chesspuertoricocoffee.com>"
+ security.email_confirm.enabled = true
+ 
+ push.firebase.mobile.url = "https://fcm.googleapis.com/v1/projects/lichess-testing-df65f/messages:send"
+@@ -52,3 +58,9 @@
+ hcaptcha.enabled = false
+ hcaptcha.public_key = "10000000-ffff-ffff-ffff-000000000001"
+ hcaptcha.private_key = "0x0000000000000000000000000000000000000000"
++
++# Task 6+7: Opening explorer + tablebase via public lichess endpoints
++explorer.internal_endpoint = "https://explorer.lichess.ovh"
++explorer.endpoint = "https://explorer.lichess.ovh"
++explorer.oauth_token = "CHANGEME_LICHESS_OAUTH_TOKEN"
++explorer.tablebase_endpoint = "https://tablebase.lichess.ovh"

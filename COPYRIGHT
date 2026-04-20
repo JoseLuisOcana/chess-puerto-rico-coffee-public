@@ -1,0 +1,36 @@
+Chess Puerto Rico Coffee — Modifications and additions
+
+Copyright (C) 2026 Jose Luis Ocana and contributors
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public
+License along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+---
+
+This work is a modification of Lichess (https://lichess.org), whose
+original source code is copyright © the Lichess authors and is licensed
+under AGPL-3.0. See LICENSE for the full license text.
+
+Upstream projects used in this deployment include:
+  - lichess-org/lila (AGPL-3.0)
+  - lichess-org/lila-ws (AGPL-3.0)
+  - lichess-org/lila-docker (MIT)
+  - lichess-org/lila-fishnet (AGPL-3.0)
+  - lichess-org/fishnet (AGPL-3.0)
+  - lichess-org/lila-search (AGPL-3.0)
+  - lichess-org/lila-engine (AGPL-3.0)
+  - lichess-org/lila-push (AGPL-3.0)
+  - lichess-org/lila-gif (AGPL-3.0)
+  - official-stockfish/Stockfish (GPL-3.0)
+
+For the specific versions used, see NOTICE.md.

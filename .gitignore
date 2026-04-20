@@ -1,0 +1,20 @@
+# Secrets / credentials — never commit
+.env
+*.key
+*.pem
+*secret*
+*password*
+
+# Large datasets (not for a public repo — re-downloadable from source)
+*.csv
+*.csv.zst
+puzzle-import/lichess_db_puzzle.csv
+puzzle-import/lichess_db_puzzle.csv.zst
+
+# Dependencies / build artifacts
+node_modules/
+vendor/
+
+# Logs / OS junk
+*.log
+.DS_Store

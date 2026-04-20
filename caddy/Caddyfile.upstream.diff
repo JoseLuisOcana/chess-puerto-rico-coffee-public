@@ -1,0 +1,15 @@
+diff --git a/conf/Caddyfile b/conf/Caddyfile
+index 7bb8e99..621e6f4 100644
+--- a/conf/Caddyfile
++++ b/conf/Caddyfile
+@@ -38,8 +38,8 @@ handle_path /embed/* {
+ }
+ 
+ @websockets {
+-	header Connection *Upgrade*
+-	header Upgrade websocket
++	header_regexp Connection (?i)upgrade
++	header_regexp Upgrade (?i)websocket
+ }
+ 
+ reverse_proxy @websockets lila_ws:9664 {

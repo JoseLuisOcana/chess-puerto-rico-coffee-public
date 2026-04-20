@@ -1,0 +1,318 @@
+include:
+  - compose-lila-ws-${LILA_WS_CONTAINER:-image}.yml
+  - compose-search.yml
+
+services:
+  mongodb:
+    image: mongo:7.0.28-jammy
+    restart: unless-stopped
+    command: mongod --bind_ip_all --replSet rs0 --wiredTigerCacheSizeGB 2
+    healthcheck:
+      test: mongosh --quiet /scripts/replica-set.js
+      interval: 5s
+      timeout: 30s
+      start_period: 0s
+      retries: 30
+    volumes:
+      - ./repos/lila:/lila
+      - ./scripts:/scripts
+    profiles:
+      - base
+
+  mongodb_secondary:
+    image: mongo:7.0.28-jammy
+    restart: unless-stopped
+    command: mongod --bind_ip_all --replSet rs0 --wiredTigerCacheSizeGB 2
+    profiles:
+      - base
+
+  redis:
+    image: redis:8.0.3-alpine3.21
+    restart: unless-stopped
+    profiles:
+      - base
+
+  lila:
+    build:
+      context: docker
+      args:
+        USER_ID: ${USER_ID:-}
+        GROUP_ID: ${GROUP_ID:-}
+      dockerfile: sbt.Dockerfile
+    user: ${USER_ID:-}:${GROUP_ID:-}
+    working_dir: /lila
+    entrypoint: ./lila.sh run
+    restart: unless-stopped
+    environment:
+      - LILA_DOMAIN=${LILA_DOMAIN:-localhost:8080}
+      - LILA_URL=${LILA_URL:-http://localhost:8080}
+      - MOCK_EMAIL=${MOCK_EMAIL:-false}
+      - MAILER_PASSWORD=${MAILER_PASSWORD}
+      - ENABLE_MONITORING=${ENABLE_MONITORING:-true}
+      - ENABLE_RATE_LIMITING=${ENABLE_RATE_LIMITING:-true}
+    volumes:
+      - ./repos/lila:/lila
+      - ./repos/chessground:/chessground
+      - ./repos/pgn-viewer:/pgn-viewer
+      - ./repos/bbpPairings:/opt/bbpPairings
+      - ./repos/scalachess:/scalachess
+      - ./conf/lila.conf:/lila/conf/application.conf
+      - ./conf/firebase-service-account.json:/opt/firebase-service-account.json:ro
+    profiles:
+      - base
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    ports:
+      - 8080:80
+      - 9664:9664
+    environment:
+      - LILA_DOMAIN=${LILA_DOMAIN:-localhost:8080}
+      - LILA_URL=${LILA_URL:-http://localhost:8080}
+    volumes:
+      - ./conf/Caddyfile:/etc/caddy/Caddyfile
+      - ./repos/lila/public:/lila/public
+      - ./static:/static
+    profiles:
+      - base
+
+  mono:
+    image: ghcr.io/lichess-org/lila-docker:main
+    restart: unless-stopped
+    ports:
+      - 8080:8080
+      - 9664:9664
+      - 9664:9664
+    environment:
+      - LILA_DOMAIN=${LILA_DOMAIN:-localhost:8080}
+      - LILA_URL=${LILA_URL:-http://localhost:8080}
+    profiles:
+      - quick
+
+  api_docs:
+    build:
+      context: docker
+      args:
+        USER_ID: ${USER_ID:-}
+        GROUP_ID: ${GROUP_ID:-}
+      dockerfile: ui.Dockerfile
+    working_dir: /api/doc
+    entrypoint: ["/bin/sh", "-c", "npm install && npm run serve -- --host=0.0.0.0"]
+    restart: unless-stopped
+    user: ${USER_ID:-}:${GROUP_ID:-}
+    ports:
+      - 8089:8089
+    volumes:
+      - ./repos/api:/api
+    profiles:
+      - api-docs
+
+  chessground:
+    build:
+      context: docker
+      args:
+        USER_ID: ${USER_ID:-}
+        GROUP_ID: ${GROUP_ID:-}
+      dockerfile: ui.Dockerfile
+    entrypoint: ["/bin/sh", "-c", "pnpm install && pnpm run compile && pnpx http-server -p 8080"]
+    restart: unless-stopped
+    user: ${USER_ID:-}:${GROUP_ID:-}
+    ports:
+      - 8090:8080
+    volumes:
+      - ./repos/chessground:/app
+      - ./.pnpm-store:/.pnpm-store
+    profiles:
+      - chessground
+
+  pgn_viewer:
+    build:
+      context: docker
+      args:
+        USER_ID: ${USER_ID:-}
+        GROUP_ID: ${GROUP_ID:-}
+      dockerfile: ui.Dockerfile
+    entrypoint: ["/bin/sh", "-c", "pnpm install && pnpm run demo"]
+    restart: unless-stopped
+    user: ${USER_ID:-}:${GROUP_ID:-}
+    ports:
+      - 8091:8080
+    volumes:
+      - ./repos/pgn-viewer:/app
+      - ./.pnpm-store:/.pnpm-store
+    profiles:
+      - pgn-viewer
+
+  lila_engine:
+    image: rust:1.89.0-trixie
+    working_dir: /lila-engine
+    entrypoint: cargo run -- --bind 0.0.0.0:9666 --mongodb mongodb://mongodb
+    restart: unless-stopped
+    user: ${USER_ID:-}:${GROUP_ID:-}
+    environment:
+      - LILA_ENGINE_LOG=lila_engine=debug,tower_http=debug
+    ports:
+      - 9666:9666
+    volumes:
+      - ./repos/lila-engine:/lila-engine
+    profiles:
+      - external-engine
+
+  lila_fishnet:
+    build:
+      context: docker
+      args:
+        USER_ID: ${USER_ID:-}
+        GROUP_ID: ${GROUP_ID:-}
+      dockerfile: sbt.Dockerfile
+    user: ${USER_ID:-}:${GROUP_ID:-}
+    working_dir: /lila-fishnet
+    entrypoint: sbt app/run
+    environment:
+      - REDIS_HOST=redis
+      # - HTTP_API_LOGGER=true
+    restart: unless-stopped
+    volumes:
+      - ./repos/lila-fishnet:/lila-fishnet
+    profiles:
+      - stockfish-play
+
+  fishnet_play:
+    image: niklasf/fishnet:2.12.0
+    restart: unless-stopped
+    environment:
+      - ENDPOINT=http://lila_fishnet:9665/fishnet
+      - MAX_BACKOFF=5
+      - STATS_FILE=/stats.json
+    profiles:
+      - stockfish-play
+
+  fishnet_analysis:
+    image: niklasf/fishnet:2.12.0
+    restart: unless-stopped
+    environment:
+      - ENDPOINT=http://lila:9663/fishnet
+      - MAX_BACKOFF=5
+      - STATS_FILE=/stats.json
+    profiles:
+      - stockfish-analysis
+
+  python:
+    build:
+      context: docker
+      dockerfile: python.Dockerfile
+    volumes:
+      - ./repos/berserk:/berserk
+      - ./repos/lila-db-seed:/lila-db-seed
+      - ./scripts:/scripts
+    profiles:
+      - utils
+
+  ui:
+    build:
+      context: docker
+      args:
+        USER_ID: ${USER_ID:-}
+        GROUP_ID: ${GROUP_ID:-}
+      dockerfile: ui.Dockerfile
+    restart: unless-stopped
+    user: ${USER_ID:-}:${GROUP_ID:-}
+    environment:
+      - CI=1 # to disable pnpm install prompts
+    volumes:
+      - ./repos/lila:/lila
+      - ./repos/chessground:/chessground
+      - ./repos/pgn-viewer:/pgn-viewer
+      - ./.pnpm-store:/.pnpm-store
+    profiles:
+      - utils
+
+  lila_gif:
+    image: rust:1.89.0-trixie
+    working_dir: /lila-gif
+    entrypoint: cargo run -- --bind 0.0.0.0:6175
+    restart: unless-stopped
+    user: ${USER_ID:-}:${GROUP_ID:-}
+    ports:
+      - 6175:6175
+    volumes:
+      - ./repos/lila-gif:/lila-gif
+    profiles:
+      - gifs
+
+  lila_push:
+    image: rust:1.89.0-trixie
+    working_dir: /lila-push
+    entrypoint: cargo run --release -- --vapid private.pem --vapid-subject mailto:contact@lichess.org --bind 0.0.0.0:9054
+    restart: unless-stopped
+    user: ${USER_ID:-}:${GROUP_ID:-}
+    ports:
+      - 9054:9054
+    volumes:
+      - ./repos/lila-push:/lila-push
+      - ./conf/private.pem:/lila-push/private.pem
+    profiles:
+      - push
+
+  picfit:
+    build:
+      context: docker
+      dockerfile: picfit.Dockerfile
+    ports:
+      - 3001:3001
+    volumes:
+      - ./conf/picfit.json:/mnt/config.json
+      - ./docker/assets:/uploads
+    profiles:
+      - thumbnails
+
+  mailpit:
+    image: axllent/mailpit:v1.27.7
+    restart: unless-stopped
+    ports:
+      - 8025:8025
+    profiles:
+      - email
+
+  mongo_express_primary:
+    image: mongo-express:1.0.2-20-alpine3.19
+    restart: unless-stopped
+    ports:
+      - 8081:8081
+    environment:
+      - ME_CONFIG_BASICAUTH=false
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+    depends_on:
+      - mongodb
+    profiles:
+      - mongo-express
+  
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    volumes:
+      - ./conf/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - 9090:9090
+    profiles:
+      - monitoring
+
+  influxdb:
+    image: influxdb:2.7.12-alpine
+    restart: unless-stopped
+    ports:
+      - 8086:8086
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=password
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=secret
+      - DOCKER_INFLUXDB_INIT_ORG=lila-docker
+      - DOCKER_INFLUXDB_INIT_BUCKET=kamon
+    profiles:
+      - monitoring
+
+networks:
+  default:
+    name: lila-network
+    driver: bridge

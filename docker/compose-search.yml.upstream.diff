@@ -1,0 +1,12 @@
+diff --git a/compose-search.yml b/compose-search.yml
+index f45f8f7..5ea3d68 100644
+--- a/compose-search.yml
++++ b/compose-search.yml
+@@ -7,6 +7,7 @@ services:
+       - http.cors.allow-origin=/.*/
+       - http.cors.enabled=true
+       - xpack.security.enabled=false
++      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+     volumes:
+       - ./conf/elasticsearch/synonyms:/usr/share/elasticsearch/config/synonyms
+     ports:

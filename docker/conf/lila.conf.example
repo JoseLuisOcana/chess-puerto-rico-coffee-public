@@ -1,0 +1,66 @@
+include "base"
+include "version"
+
+user.password.bpass.secret = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
+security.email_confirm.secret  = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
+security.password_reset.secret = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
+security.email_change.secret   = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
+security.login_token.secret    = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
+
+net.site.name = "lila"
+net.domain = ${?LILA_DOMAIN}
+net.socket.domains = [ ${?LILA_DOMAIN} ]
+net.asset.base_url = ${?LILA_URL}
+net.base_url = ${?LILA_URL}
+net.ratelimit = ${?ENABLE_RATE_LIMITING}
+
+mongodb.uri = "mongodb://mongodb?appName=lila"
+redis.uri = "redis://redis"
+
+game.gifUrl = "http://lila_gif:6175"
+
+search.enabled = true
+search.endpoint = "http://lila_search_app:9673"
+
+memo.picfit.endpointGet = ${?LILA_URL}
+memo.picfit.endpointPost = "http://picfit:3001"
+
+mailer.primary.mock     = ${?MOCK_EMAIL}
+mailer.primary.tls      = true
+mailer.primary.host     = "smtp.ionos.com"
+mailer.primary.port     = 587
+mailer.primary.user     = "system@chesspuertoricocoffee.com"
+mailer.primary.password = ${?MAILER_PASSWORD}
+mailer.primary.sender   = "Chess Puerto Rico Coffee <system@chesspuertoricocoffee.com>"
+security.email_confirm.enabled = true
+
+push.firebase.mobile.url = "https://fcm.googleapis.com/v1/projects/lichess-testing-df65f/messages:send"
+push.firebase.mobile.json = "/opt/firebase-service-account.json"
+push.web.url = "http://lila_push:9054"
+push.web.vapid_public_key = "BDTVzVZ3_f83JgH1SJmZrhg-FNZ36Sixc_zrR1-1ZGVHUPmFeU6Q_-JQLN8NF5niYW_1jRU47aPczYA0FbgUCus="
+
+swiss.bbpairing = "/opt/bbpPairings/bbpPairings.exe"
+
+kamon.enabled = ${?ENABLE_MONITORING}
+kamon.influxdb.hostname = "influxdb"
+kamon.influxdb.authentication.token = "secret"
+kamon.metric.tick-interval = 2 seconds
+kamon.prometheus.lilaKey = "x"
+
+plan.stripe.keys.public = "pk_test_123"
+plan.stripe.keys.secret = "sk_test_123"
+plan.payPal.keys.public = "sb"
+
+streamer.twitch.endpoint = "http://caddy/static/twitch-streamers.json"
+streamer.twitch.client_id = "twitch-client-id"
+streamer.twitch.secret = "twitch-secret"
+
+hcaptcha.enabled = false
+hcaptcha.public_key = "10000000-ffff-ffff-ffff-000000000001"
+hcaptcha.private_key = "0x0000000000000000000000000000000000000000"
+
+# Task 6+7: Opening explorer + tablebase via public lichess endpoints
+explorer.internal_endpoint = "https://explorer.lichess.ovh"
+explorer.endpoint = "https://explorer.lichess.ovh"
+explorer.oauth_token = "CHANGEME_LICHESS_OAUTH_TOKEN"
+explorer.tablebase_endpoint = "https://tablebase.lichess.ovh"
