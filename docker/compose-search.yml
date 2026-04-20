@@ -7,7 +7,7 @@ services:
       - http.cors.allow-origin=/.*/
       - http.cors.enabled=true
       - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
     volumes:
       - ./conf/elasticsearch/synonyms:/usr/share/elasticsearch/config/synonyms
     ports:
