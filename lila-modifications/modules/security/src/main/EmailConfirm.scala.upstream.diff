@@ -1,0 +1,23 @@
+diff --git a/modules/security/src/main/EmailConfirm.scala b/modules/security/src/main/EmailConfirm.scala
+index e695ffe..2463068 100644
+--- a/modules/security/src/main/EmailConfirm.scala
++++ b/modules/security/src/main/EmailConfirm.scala
+@@ -59,7 +59,8 @@ final class EmailConfirmMailer(
+           mailer.sendOrFail:
+             Mailer.Message(
+               to = email,
+-              subject = trans.emailConfirm_subject.txt(user.username),
++              // Chess Puerto Rico Coffee: every translation of this subject says "lichess.org".
++              subject = trans.emailConfirm_subject.txt(user.username).replace("lichess.org", "Chess Puerto Rico Coffee"),
+               text = Mailer.txt.addServiceNote(s"""
+ ${trans.emailConfirm_click.txt()}
+ 
+@@ -67,7 +68,7 @@ $url
+ 
+ ${trans.common_orPaste.txt()}
+ 
+-${trans.emailConfirm_justIgnore.txt("https://lichess.org")}
++${trans.emailConfirm_justIgnore.txt("https://chesspuertoricocoffee.com")}
+ """),
+               htmlBody = emailMessage(
+                 pDesc(trans.emailConfirm_click()),

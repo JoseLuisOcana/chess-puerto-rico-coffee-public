@@ -7,6 +7,7 @@ services:
     image: mongo:7.0.28-jammy
     restart: unless-stopped
     command: mongod --bind_ip_all --replSet rs0 --wiredTigerCacheSizeGB 2
+    stop_grace_period: 60s
     healthcheck:
       test: mongosh --quiet /scripts/replica-set.js
       interval: 5s
@@ -16,19 +17,15 @@ services:
     volumes:
       - ./repos/lila:/lila
       - ./scripts:/scripts
-    profiles:
-      - base
-
-  mongodb_secondary:
-    image: mongo:7.0.28-jammy
-    restart: unless-stopped
-    command: mongod --bind_ip_all --replSet rs0 --wiredTigerCacheSizeGB 2
+      - mongo_data_primary:/data/db
     profiles:
       - base
 
   redis:
     image: redis:8.0.3-alpine3.21
     restart: unless-stopped
+    volumes:
+      - redis_data:/data
     profiles:
       - base
 
@@ -48,6 +45,12 @@ services:
       - LILA_URL=${LILA_URL:-http://localhost:8080}
       - MOCK_EMAIL=${MOCK_EMAIL:-false}
       - MAILER_PASSWORD=${MAILER_PASSWORD}
+      - LILA_BPASS_SECRET=${LILA_BPASS_SECRET}
+      - LILA_EMAIL_CONFIRM_SECRET=${LILA_EMAIL_CONFIRM_SECRET}
+      - LILA_PASSWORD_RESET_SECRET=${LILA_PASSWORD_RESET_SECRET}
+      - LILA_EMAIL_CHANGE_SECRET=${LILA_EMAIL_CHANGE_SECRET}
+      - LILA_LOGIN_TOKEN_SECRET=${LILA_LOGIN_TOKEN_SECRET}
+      - LILA_EXPLORER_OAUTH_TOKEN=${LILA_EXPLORER_OAUTH_TOKEN}
       - ENABLE_MONITORING=${ENABLE_MONITORING:-true}
       - ENABLE_RATE_LIMITING=${ENABLE_RATE_LIMITING:-true}
     volumes:
@@ -65,8 +68,17 @@ services:
     image: caddy:2.10.2-alpine
     restart: unless-stopped
     ports:
-      - 8080:80
-      - 9664:9664
+      # 2026-09-13: bound to 127.0.0.1 deliberately. Published as 0.0.0.0 these were
+      # reachable from the internet: Docker DNATs published ports in PREROUTING, so the
+      # packets traverse FORWARD -> DOCKER and the host's "-P INPUT DROP" never applies.
+      # Loopback binding means the DNAT rule is never created at all, which is stronger
+      # than filtering it in DOCKER-USER. nginx reaches Caddy via 127.0.0.1:8080, and
+      # host-originated traffic goes OUTPUT/POSTROUTING so it is unaffected.
+      # 9664 (lila_ws) is proxied by NOTHING on the host - nginx sends websockets to
+      # 127.0.0.1:8080 and Caddy routes them to lila_ws:9664 inside the docker network -
+      # so this publication is vestigial and loopback-binding it changes no traffic path.
+      - 127.0.0.1:8080:80
+      - 127.0.0.1:9664:9664
     environment:
       - LILA_DOMAIN=${LILA_DOMAIN:-localhost:8080}
       - LILA_URL=${LILA_URL:-http://localhost:8080}
@@ -153,7 +165,10 @@ services:
     environment:
       - LILA_ENGINE_LOG=lila_engine=debug,tower_http=debug
     ports:
-      - 9666:9666
+      # 2026-09-13: loopback-bound. Published on 0.0.0.0 these were internet-reachable
+      # (docker DNATs in PREROUTING, bypassing the host's INPUT DROP policy). Every
+      # consumer addresses this service by its docker service name, never the host port.
+      - 127.0.0.1:9666:9666
     volumes:
       - ./repos/lila-engine:/lila-engine
     profiles:
@@ -235,7 +250,10 @@ services:
     restart: unless-stopped
     user: ${USER_ID:-}:${GROUP_ID:-}
     ports:
-      - 6175:6175
+      # 2026-09-13: loopback-bound. Published on 0.0.0.0 these were internet-reachable
+      # (docker DNATs in PREROUTING, bypassing the host's INPUT DROP policy). Every
+      # consumer addresses this service by its docker service name, never the host port.
+      - 127.0.0.1:6175:6175
     volumes:
       - ./repos/lila-gif:/lila-gif
     profiles:
@@ -244,11 +262,14 @@ services:
   lila_push:
     image: rust:1.89.0-trixie
     working_dir: /lila-push
-    entrypoint: cargo run --release -- --vapid private.pem --vapid-subject mailto:contact@lichess.org --bind 0.0.0.0:9054
+    entrypoint: cargo run --release -- --vapid private.pem --vapid-subject mailto:system@chesspuertoricocoffee.com --bind 0.0.0.0:9054
     restart: unless-stopped
     user: ${USER_ID:-}:${GROUP_ID:-}
     ports:
-      - 9054:9054
+      # 2026-09-13: loopback-bound. Published on 0.0.0.0 these were internet-reachable
+      # (docker DNATs in PREROUTING, bypassing the host's INPUT DROP policy). Every
+      # consumer addresses this service by its docker service name, never the host port.
+      - 127.0.0.1:9054:9054
     volumes:
       - ./repos/lila-push:/lila-push
       - ./conf/private.pem:/lila-push/private.pem
@@ -260,7 +281,10 @@ services:
       context: docker
       dockerfile: picfit.Dockerfile
     ports:
-      - 3001:3001
+      # 2026-09-13: loopback-bound preemptively. picfit is currently STOPPED, but a
+      # 0.0.0.0 publication would become internet-reachable the moment it starts.
+      # nginx proxies /api/contact -> 127.0.0.1:3001, so loopback is sufficient.
+      - 127.0.0.1:3001:3001
     volumes:
       - ./conf/picfit.json:/mnt/config.json
       - ./docker/assets:/uploads
@@ -271,7 +295,10 @@ services:
     image: axllent/mailpit:v1.27.7
     restart: unless-stopped
     ports:
-      - 8025:8025
+      # 2026-09-13: loopback-bound. Published on 0.0.0.0 these were internet-reachable
+      # (docker DNATs in PREROUTING, bypassing the host's INPUT DROP policy). Every
+      # consumer addresses this service by its docker service name, never the host port.
+      - 127.0.0.1:8025:8025
     profiles:
       - email
 
@@ -316,3 +343,21 @@ networks:
   default:
     name: lila-network
     driver: bridge
+
+volumes:
+  # Recovery 2026-05-25: pin mongodb /data/db to the real data volume.
+  # Previously /data/db was an anonymous volume (mongo image VOLUME), so each
+  # container recreation (reboot / compose up) grabbed a fresh EMPTY volume and
+  # orphaned the real data. external:true => compose never creates/deletes it,
+  # and it survives even `down -v`.
+  mongo_data_primary:
+    external: true
+    name: lila_mongo_data_primary_20260913
+
+  # Pinned 2026-09-13: redis /data was an UNDECLARED anonymous volume (redis image
+  # VOLUME), so every container recreation swapped it for a fresh empty one and
+  # orphaned the old — the same trap as mongodb above. external:true pins it to the
+  # volume currently in use and stops compose ever creating or deleting it.
+  redis_data:
+    external: true
+    name: 9ecacfab0339b71f9a366529ef533ea92a6706a8e2578e38e12748b3106c0a25

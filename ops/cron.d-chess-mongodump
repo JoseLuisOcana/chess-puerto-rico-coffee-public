@@ -1,0 +1,12 @@
+# /etc/cron.d/chess-mongodump
+#
+# 2026-10-02: nightly logical backup of the chesspuertoricocoffee.com MongoDB (lila-docker).
+# 03:30 AST, before the 04:15 daily-puzzle recycle. 14-day retention in /var/backups/chess-mongo/.
+# Every archive is read-back verified before it is kept. See /usr/local/bin/chess-mongodump.sh.
+# Silent on success (log: /var/log/chess-mongodump.log); cron mails on any failure.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=admin@example.com   # sanitized: set your admin address
+
+30 3 * * * root /usr/local/bin/chess-mongodump.sh

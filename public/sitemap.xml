@@ -1,14 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://chesspuertoricocoffee.com/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>
-  <url><loc>https://chesspuertoricocoffee.com/training</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>https://chesspuertoricocoffee.com/tournament</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>https://chesspuertoricocoffee.com/storm</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://chesspuertoricocoffee.com/streak</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://chesspuertoricocoffee.com/racer</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://chesspuertoricocoffee.com/analysis</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://chesspuertoricocoffee.com/learn</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc>https://chesspuertoricocoffee.com/practice</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc>https://chesspuertoricocoffee.com/study</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
-  <url><loc>https://chesspuertoricocoffee.com/signup</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/</loc><lastmod>2026-10-02</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/training</loc><lastmod>2026-10-02</lastmod><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/tournament</loc><lastmod>2026-10-02</lastmod><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/swiss</loc><lastmod>2026-10-02</lastmod><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/storm</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/streak</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/racer</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/analysis</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/learn</loc><lastmod>2026-10-02</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/practice</loc><lastmod>2026-10-02</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/study</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/opening</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/team/all</loc><lastmod>2026-10-02</lastmod><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/forum</loc><lastmod>2026-10-02</lastmod><changefreq>daily</changefreq><priority>0.6</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/features</loc><lastmod>2026-10-02</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/faq</loc><lastmod>2026-10-02</lastmod><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/about</loc><lastmod>2026-10-02</lastmod><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/contact-us</loc><lastmod>2026-10-02</lastmod><changefreq>monthly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/privacy</loc><lastmod>2026-10-02</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://chesspuertoricocoffee.com/terms-of-service</loc><lastmod>2026-10-02</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
 </urlset>

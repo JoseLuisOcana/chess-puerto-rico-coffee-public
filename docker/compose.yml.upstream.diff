@@ -1,26 +1,57 @@
-diff --git a/compose.yml b/compose.yml
-index 615c300..87880ac 100644
 --- a/compose.yml
 +++ b/compose.yml
-@@ -6,7 +6,7 @@ services:
+@@ -1,23 +1,13 @@
+----
+ include:
+   - compose-lila-ws-${LILA_WS_CONTAINER:-image}.yml
+   - compose-search.yml
+ 
+ services:
+-  openingexplorer:
+-    image: ghcr.io/lichess-org/lila-openingexplorer:latest
+-    restart: unless-stopped
+-    ports:
+-      - 9002:9002
+-    volumes:
+-      - openingexplorer-data:/app/_db
+-    environment:
+-      - LILA_URL=http://caddy
+-      - EXPLORER_BEARER=lip_openingexplorer
    mongodb:
      image: mongo:7.0.28-jammy
      restart: unless-stopped
 -    command: mongod --bind_ip_all --replSet rs0
 +    command: mongod --bind_ip_all --replSet rs0 --wiredTigerCacheSizeGB 2
++    stop_grace_period: 60s
      healthcheck:
        test: mongosh --quiet /scripts/replica-set.js
        interval: 5s
-@@ -22,7 +22,7 @@ services:
-   mongodb_secondary:
-     image: mongo:7.0.28-jammy
-     restart: unless-stopped
--    command: mongod --bind_ip_all --replSet rs0
-+    command: mongod --bind_ip_all --replSet rs0 --wiredTigerCacheSizeGB 2
+@@ -27,19 +17,18 @@
+     volumes:
+       - ./repos/lila:/lila
+       - ./scripts:/scripts
++      - mongo_data_primary:/data/db
      profiles:
        - base
- 
-@@ -46,8 +46,9 @@ services:
+-  mongodb_secondary:
+-    image: mongo:7.0.28-jammy
+-    restart: unless-stopped
+-    command: mongod --bind_ip_all --replSet rs0
+-    profiles:
+-      - base
++
+   redis:
+     image: redis:8.0.3-alpine3.21
+     restart: unless-stopped
++    volumes:
++      - redis_data:/data
+     profiles:
+       - base
++
+   lila:
+     build:
+       context: docker
+@@ -54,8 +43,15 @@
      environment:
        - LILA_DOMAIN=${LILA_DOMAIN:-localhost:8080}
        - LILA_URL=${LILA_URL:-http://localhost:8080}
@@ -28,19 +59,47 @@ index 615c300..87880ac 100644
 -      - ENABLE_MONITORING=${ENABLE_MONITORING:-false}
 +      - MOCK_EMAIL=${MOCK_EMAIL:-false}
 +      - MAILER_PASSWORD=${MAILER_PASSWORD}
++      - LILA_BPASS_SECRET=${LILA_BPASS_SECRET}
++      - LILA_EMAIL_CONFIRM_SECRET=${LILA_EMAIL_CONFIRM_SECRET}
++      - LILA_PASSWORD_RESET_SECRET=${LILA_PASSWORD_RESET_SECRET}
++      - LILA_EMAIL_CHANGE_SECRET=${LILA_EMAIL_CHANGE_SECRET}
++      - LILA_LOGIN_TOKEN_SECRET=${LILA_LOGIN_TOKEN_SECRET}
++      - LILA_EXPLORER_OAUTH_TOKEN=${LILA_EXPLORER_OAUTH_TOKEN}
 +      - ENABLE_MONITORING=${ENABLE_MONITORING:-true}
        - ENABLE_RATE_LIMITING=${ENABLE_RATE_LIMITING:-true}
      volumes:
        - ./repos/lila:/lila
-@@ -65,6 +66,7 @@ services:
+@@ -67,11 +63,22 @@
+       - ./conf/firebase-service-account.json:/opt/firebase-service-account.json:ro
+     profiles:
+       - base
++
+   caddy:
+     image: caddy:2.10.2-alpine
      restart: unless-stopped
      ports:
-       - 8080:80
-+      - 9664:9664
+-      - 8080:80
++      # 2026-09-13: bound to 127.0.0.1 deliberately. Published as 0.0.0.0 these were
++      # reachable from the internet: Docker DNATs published ports in PREROUTING, so the
++      # packets traverse FORWARD -> DOCKER and the host's "-P INPUT DROP" never applies.
++      # Loopback binding means the DNAT rule is never created at all, which is stronger
++      # than filtering it in DOCKER-USER. nginx reaches Caddy via 127.0.0.1:8080, and
++      # host-originated traffic goes OUTPUT/POSTROUTING so it is unaffected.
++      # 9664 (lila_ws) is proxied by NOTHING on the host - nginx sends websockets to
++      # 127.0.0.1:8080 and Caddy routes them to lila_ws:9664 inside the docker network -
++      # so this publication is vestigial and loopback-binding it changes no traffic path.
++      - 127.0.0.1:8080:80
++      - 127.0.0.1:9664:9664
      environment:
        - LILA_DOMAIN=${LILA_DOMAIN:-localhost:8080}
        - LILA_URL=${LILA_URL:-http://localhost:8080}
-@@ -80,6 +82,8 @@ services:
+@@ -81,16 +88,20 @@
+       - ./static:/static
+     profiles:
+       - base
++
+   mono:
+     image: ghcr.io/lichess-org/lila-docker:main
      restart: unless-stopped
      ports:
        - 8080:8080
@@ -49,3 +108,253 @@ index 615c300..87880ac 100644
      environment:
        - LILA_DOMAIN=${LILA_DOMAIN:-localhost:8080}
        - LILA_URL=${LILA_URL:-http://localhost:8080}
+     profiles:
+       - quick
++
+   api_docs:
+     build:
+       context: docker
+@@ -99,10 +110,7 @@
+         GROUP_ID: ${GROUP_ID:-}
+       dockerfile: ui.Dockerfile
+     working_dir: /api/doc
+-    entrypoint:
+-      - /bin/sh
+-      - -c
+-      - pnpm install && pnpm dev --host 0.0.0.0
++    entrypoint: ["/bin/sh", "-c", "npm install && npm run serve -- --host=0.0.0.0"]
+     restart: unless-stopped
+     user: ${USER_ID:-}:${GROUP_ID:-}
+     ports:
+@@ -111,6 +119,7 @@
+       - ./repos/api:/api
+     profiles:
+       - api-docs
++
+   chessground:
+     build:
+       context: docker
+@@ -118,10 +127,7 @@
+         USER_ID: ${USER_ID:-}
+         GROUP_ID: ${GROUP_ID:-}
+       dockerfile: ui.Dockerfile
+-    entrypoint:
+-      - /bin/sh
+-      - -c
+-      - pnpm install && pnpm run compile && pnpx http-server -p 8080
++    entrypoint: ["/bin/sh", "-c", "pnpm install && pnpm run compile && pnpx http-server -p 8080"]
+     restart: unless-stopped
+     user: ${USER_ID:-}:${GROUP_ID:-}
+     ports:
+@@ -131,6 +137,7 @@
+       - ./.pnpm-store:/.pnpm-store
+     profiles:
+       - chessground
++
+   pgn_viewer:
+     build:
+       context: docker
+@@ -138,10 +145,7 @@
+         USER_ID: ${USER_ID:-}
+         GROUP_ID: ${GROUP_ID:-}
+       dockerfile: ui.Dockerfile
+-    entrypoint:
+-      - /bin/sh
+-      - -c
+-      - pnpm install && pnpm run demo
++    entrypoint: ["/bin/sh", "-c", "pnpm install && pnpm run demo"]
+     restart: unless-stopped
+     user: ${USER_ID:-}:${GROUP_ID:-}
+     ports:
+@@ -151,8 +155,9 @@
+       - ./.pnpm-store:/.pnpm-store
+     profiles:
+       - pgn-viewer
++
+   lila_engine:
+-    image: rust:1.95.0-trixie
++    image: rust:1.89.0-trixie
+     working_dir: /lila-engine
+     entrypoint: cargo run -- --bind 0.0.0.0:9666 --mongodb mongodb://mongodb
+     restart: unless-stopped
+@@ -160,11 +165,15 @@
+     environment:
+       - LILA_ENGINE_LOG=lila_engine=debug,tower_http=debug
+     ports:
+-      - 9666:9666
++      # 2026-09-13: loopback-bound. Published on 0.0.0.0 these were internet-reachable
++      # (docker DNATs in PREROUTING, bypassing the host's INPUT DROP policy). Every
++      # consumer addresses this service by its docker service name, never the host port.
++      - 127.0.0.1:9666:9666
+     volumes:
+       - ./repos/lila-engine:/lila-engine
+     profiles:
+       - external-engine
++
+   lila_fishnet:
+     build:
+       context: docker
+@@ -183,16 +192,17 @@
+       - ./repos/lila-fishnet:/lila-fishnet
+     profiles:
+       - stockfish-play
++
+   fishnet_play:
+     image: niklasf/fishnet:2.12.0
+     restart: unless-stopped
+     environment:
+       - ENDPOINT=http://lila_fishnet:9665/fishnet
+-      - KEY=fishnetplaydev
+       - MAX_BACKOFF=5
+       - STATS_FILE=/stats.json
+     profiles:
+       - stockfish-play
++
+   fishnet_analysis:
+     image: niklasf/fishnet:2.12.0
+     restart: unless-stopped
+@@ -202,6 +212,7 @@
+       - STATS_FILE=/stats.json
+     profiles:
+       - stockfish-analysis
++
+   python:
+     build:
+       context: docker
+@@ -212,6 +223,7 @@
+       - ./scripts:/scripts
+     profiles:
+       - utils
++
+   ui:
+     build:
+       context: docker
+@@ -222,7 +234,7 @@
+     restart: unless-stopped
+     user: ${USER_ID:-}:${GROUP_ID:-}
+     environment:
+-      - CI=1  # to disable pnpm install prompts
++      - CI=1 # to disable pnpm install prompts
+     volumes:
+       - ./repos/lila:/lila
+       - ./repos/chessground:/chessground
+@@ -230,50 +242,66 @@
+       - ./.pnpm-store:/.pnpm-store
+     profiles:
+       - utils
++
+   lila_gif:
+-    image: rust:1.95.0-trixie
++    image: rust:1.89.0-trixie
+     working_dir: /lila-gif
+     entrypoint: cargo run -- --bind 0.0.0.0:6175
+     restart: unless-stopped
+     user: ${USER_ID:-}:${GROUP_ID:-}
+     ports:
+-      - 6175:6175
++      # 2026-09-13: loopback-bound. Published on 0.0.0.0 these were internet-reachable
++      # (docker DNATs in PREROUTING, bypassing the host's INPUT DROP policy). Every
++      # consumer addresses this service by its docker service name, never the host port.
++      - 127.0.0.1:6175:6175
+     volumes:
+       - ./repos/lila-gif:/lila-gif
+     profiles:
+       - gifs
++
+   lila_push:
+-    image: rust:1.95.0-trixie
++    image: rust:1.89.0-trixie
+     working_dir: /lila-push
+-    entrypoint: cargo run --release -- --vapid private.pem --vapid-subject mailto:contact@lichess.org
+-      --bind 0.0.0.0:9054
++    entrypoint: cargo run --release -- --vapid private.pem --vapid-subject mailto:system@chesspuertoricocoffee.com --bind 0.0.0.0:9054
+     restart: unless-stopped
+     user: ${USER_ID:-}:${GROUP_ID:-}
+     ports:
+-      - 9054:9054
++      # 2026-09-13: loopback-bound. Published on 0.0.0.0 these were internet-reachable
++      # (docker DNATs in PREROUTING, bypassing the host's INPUT DROP policy). Every
++      # consumer addresses this service by its docker service name, never the host port.
++      - 127.0.0.1:9054:9054
+     volumes:
+       - ./repos/lila-push:/lila-push
+       - ./conf/private.pem:/lila-push/private.pem
+     profiles:
+       - push
++
+   picfit:
+     build:
+       context: docker
+       dockerfile: picfit.Dockerfile
+     ports:
+-      - 3001:3001
++      # 2026-09-13: loopback-bound preemptively. picfit is currently STOPPED, but a
++      # 0.0.0.0 publication would become internet-reachable the moment it starts.
++      # nginx proxies /api/contact -> 127.0.0.1:3001, so loopback is sufficient.
++      - 127.0.0.1:3001:3001
+     volumes:
+       - ./conf/picfit.json:/mnt/config.json
+       - ./docker/assets:/uploads
+     profiles:
+       - thumbnails
++
+   mailpit:
+     image: axllent/mailpit:v1.27.7
+     restart: unless-stopped
+     ports:
+-      - 8025:8025
++      # 2026-09-13: loopback-bound. Published on 0.0.0.0 these were internet-reachable
++      # (docker DNATs in PREROUTING, bypassing the host's INPUT DROP policy). Every
++      # consumer addresses this service by its docker service name, never the host port.
++      - 127.0.0.1:8025:8025
+     profiles:
+       - email
++
+   mongo_express_primary:
+     image: mongo-express:1.0.2-20-alpine3.19
+     restart: unless-stopped
+@@ -286,6 +314,7 @@
+       - mongodb
+     profiles:
+       - mongo-express
++  
+   prometheus:
+     image: prom/prometheus:v3.5.0
+     volumes:
+@@ -294,6 +323,7 @@
+       - 9090:9090
+     profiles:
+       - monitoring
++
+   influxdb:
+     image: influxdb:2.7.12-alpine
+     restart: unless-stopped
+@@ -309,10 +339,25 @@
+     profiles:
+       - monitoring
+ 
+-volumes:
+-  openingexplorer-data:
+-
+ networks:
+   default:
+     name: lila-network
+     driver: bridge
++
++volumes:
++  # Recovery 2026-05-25: pin mongodb /data/db to the real data volume.
++  # Previously /data/db was an anonymous volume (mongo image VOLUME), so each
++  # container recreation (reboot / compose up) grabbed a fresh EMPTY volume and
++  # orphaned the real data. external:true => compose never creates/deletes it,
++  # and it survives even `down -v`.
++  mongo_data_primary:
++    external: true
++    name: lila_mongo_data_primary_20260913
++
++  # Pinned 2026-09-13: redis /data was an UNDECLARED anonymous volume (redis image
++  # VOLUME), so every container recreation swapped it for a fresh empty one and
++  # orphaned the old — the same trap as mongodb above. external:true pins it to the
++  # volume currently in use and stops compose ever creating or deleting it.
++  redis_data:
++    external: true
++    name: 9ecacfab0339b71f9a366529ef533ea92a6706a8e2578e38e12748b3106c0a25

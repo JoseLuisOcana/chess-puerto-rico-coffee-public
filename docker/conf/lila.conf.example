@@ -1,13 +1,13 @@
 include "base"
 include "version"
 
-user.password.bpass.secret = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
-security.email_confirm.secret  = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
-security.password_reset.secret = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
-security.email_change.secret   = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
-security.login_token.secret    = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
-
-net.site.name = "lila"
+user.password.bpass.secret = ${?LILA_BPASS_SECRET}
+security.email_confirm.secret  = ${?LILA_EMAIL_CONFIRM_SECRET}
+security.password_reset.secret = ${?LILA_PASSWORD_RESET_SECRET}
+security.email_change.secret   = ${?LILA_EMAIL_CHANGE_SECRET}
+security.login_token.secret    = ${?LILA_LOGIN_TOKEN_SECRET}
+# 2026-10-02: was "lila" (shown in page titles + header; nginx sub_filters patched over it)
+net.site.name = "Chess Puerto Rico Coffee"
 net.domain = ${?LILA_DOMAIN}
 net.socket.domains = [ ${?LILA_DOMAIN} ]
 net.asset.base_url = ${?LILA_URL}
@@ -62,5 +62,21 @@ hcaptcha.private_key = "CHANGEME_HCAPTCHA_PRIVATE_KEY"
 # Task 6+7: Opening explorer + tablebase via public lichess endpoints
 explorer.internal_endpoint = "https://explorer.lichess.ovh"
 explorer.endpoint = "https://explorer.lichess.ovh"
-explorer.oauth_token = "CHANGEME_LICHESS_OAUTH_TOKEN"
+explorer.oauth_token = ${?LILA_EXPLORER_OAUTH_TOKEN}
 explorer.tablebase_endpoint = "https://tablebase.lichess.ovh"
+
+# 2026-09-13: trust the reverse-proxy chain so lila sees REAL client IPs.
+# Without this, every one of lila's ~28 IP-keyed rate limiters keyed on the Caddy
+# container's docker IP (verified: every ratelimit line in all.log read 172.18.0.4),
+# collapsing them into a single global bucket. That is an availability bug, not just a
+# weak control - on 2026-08-11 one client exhausted a 15/min image-export budget shared
+# by every visitor.
+#
+# SAFE ONLY BECAUSE the proxy ports are not externally reachable (verified 2026-09-13):
+#   - compose.yml binds 8080/9664 to 127.0.0.1, so the DNAT rule is scoped -d 127.0.0.1/32
+#   - DOCKER-USER drops external traffic to those ports (docker-port-guard.service)
+#   - lila's own :9663 is never published on the host
+# If any of those change, X-Forwarded-For becomes spoofable and this must be reverted.
+# Chain is: client -> nginx (adds X-Forwarded-For) -> 127.0.0.1:8080 -> Caddy -> lila:9663
+play.http.forwarded.version = x-forwarded
+play.http.forwarded.trustedProxies = ["172.18.0.0/16", "127.0.0.1", "::1"]

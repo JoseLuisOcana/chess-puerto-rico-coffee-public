@@ -46,6 +46,35 @@ reverse_proxy @websockets lila_ws:9664 {
 	header_up Origin {$LILA_URL}
 }
 
+# 2026-09-13: content-hashed assets are immutable — the filename carries the
+# content hash, so the URL changes whenever the bytes change and the response can
+# be cached forever. Previously these inherited the blanket no-store below, which
+# meant no browser or crawler could ever cache them and there was no ETag or
+# Last-Modified to revalidate against. Applebot alone re-fetched 427 such files
+# 20,714 times in 7 days (~48% of all chess traffic).
+#
+# Scoped DELIBERATELY to the three directories whose filenames are verified
+# content-hashed:
+#   /assets/compiled/site.K4L5SANM.js      /assets/css/site.dc821f44.css
+#   /assets/hashed/Capture.60c4c606.mp3
+# NOT included, because their filenames carry no hash and caching them for a year
+# would pin stale content:
+#   /assets/vendor/  (e.g. ChessPursuit/bin-release/game.js)
+#   /assets/logo/    (e.g. lichess.svg)
+#   /assets/______N/ (lila's version-prefixed tree — safe in principle, left out
+#                     to keep this change minimal and reversible)
+@immutable_assets path /assets/compiled/* /assets/css/* /assets/hashed/*
+
+reverse_proxy @immutable_assets lila:9663 {
+	header_up Host {$LILA_DOMAIN}
+	header_up Origin {$LILA_URL}
+
+	# allow CORS for requests from web client on lichess.org/api
+	header_down Access-Control-Allow-Origin "*"
+
+	header_down Cache-Control "public, max-age=31536000, immutable"
+}
+
 reverse_proxy lila:9663 {
 	header_up Host {$LILA_DOMAIN}
 	header_up Origin {$LILA_URL}

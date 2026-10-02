@@ -1,0 +1,15 @@
+diff --git a/build.sbt b/build.sbt
+index 356b7ad..c27c9a6 100644
+--- a/build.sbt
++++ b/build.sbt
+@@ -14,7 +14,9 @@ lazy val root = Project("lila", file("."))
+ 
+ organization := "org.lichess"
+ Compile / run / fork := true
+-javaOptions ++= Seq("-Xms64m", "-Xmx512m", "-Dlogger.file=conf/logger.dev.xml")
++// Chess Puerto Rico Coffee 2026-10-02: app heap 512m -> 2g (this forked JVM serves HTTP; the
++// -Xmx3g in .sbtopts only applies to the sbt launcher). Upstream: "-Xmx512m".
++javaOptions ++= Seq("-Xms64m", "-Xmx2g", "-Dlogger.file=conf/logger.dev.xml")
+ javaOptions ++= {
+   if (sys.props("java.specification.version").toInt > 21)
+     Seq("--enable-native-access=ALL-UNNAMED")

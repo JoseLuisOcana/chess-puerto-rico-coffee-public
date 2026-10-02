@@ -1,0 +1,304 @@
+# ============================================================================
+#  vhost_nginx.conf — Plesk custom nginx directives for chesspuertoricocoffee.com
+#
+#  PURPOSE: pre-staging for the eventual install of the Plesk nginx component.
+#  Plesk regenerates /var/www/vhosts/system/<domain>/conf/nginx.conf from its
+#  template and would destroy every hand-made directive there. This file is the
+#  ONLY hook that survives: template nginxDomainVirtualHost.php line 256,
+#  emitted as the LAST statement inside the :443 server block, and only when
+#  the domain is active and this file exists.
+#
+#  CONTEXT: server (brace depth 1 of the :443 server block). NOT http, NOT
+#  location. `map`, `upstream` and `server` are therefore illegal here.
+#
+#  NOT INCLUDED IN THE :80 BLOCK. With sslRedirect=true (template lines 126-133)
+#  the HTTP server emits `location / { return 301 https://...; }`, closes, and
+#  returns early — it never reaches line 256.
+#
+#  DUPLICATE-DIRECTIVE RULES (verified empirically on nginx 1.18.0, 2026-09-17):
+#    root                  -> FATAL if repeated at server level (use per-location)
+#    client_max_body_size  -> FATAL if repeated at server level
+#    location <same>       -> FATAL
+#    index / access_log    -> safe, accumulate
+#    identical `if` blocks -> safe
+#  So this file must never restate a server-level directive Plesk already emits.
+# ============================================================================
+# Settings id 38: nginxProxyMode=false, nginxServePhp=false, nginxServeStatic=false.
+# Plesk will therefore emit NO `location /`, NO php location and NO `index`.
+# It DOES emit: root, client_max_body_size 134217728 (=128m, so not restated here),
+# access_log/error_log, the letsencrypt `location ^~ /.well-known/acme-challenge/`
+# and sectigo pki-validation blocks, errordocs, `location ~ /\.ht`, the webstat
+# regex, disable_symlinks and `add_header X-Powered-By PleskLin`.
+
+# --- Block aggressive AI/scraper bots (crashed lila 2026-04-29) ---
+# Server level, so it covers every path. chess-branding.conf carries the same
+# rule inside `location /` and `location = /tv`; two `if` blocks with identical
+# conditions in different contexts are legal.
+# 2026-10-02 (fix item 10): GPTBot, ClaudeBot, PerplexityBot moved OUT of this hard block - robots.txt
+# allows them; they are now served but rate-limited (see /etc/nginx/conf.d/chess-ratelimit.conf).
+if ($http_user_agent ~* (meta-externalagent|anthropic-ai|CCBot|Bytespider|FacebookBot|Amazonbot)) {
+    return 403;
+}
+
+# --- www -> apex canonical redirect ---
+# Today this is a SEPARATE :443 server block (server_name www.chess...). Plesk will
+# not regenerate it: dom_param seoRedirect = 'none', so the template emits a single
+# server block carrying chess + www.chess + ipv4.chess together. A server block
+# cannot be created from here, so the redirect is re-expressed as a server-level
+# `if`, which runs in the server-rewrite phase before location selection.
+# NOTE: this also 301s /.well-known/acme-challenge/ on the www name to the apex —
+# exactly what the current dedicated www server block already does. LE follows the
+# redirect, and the cert SAN covers both names.
+if ($host = www.chesspuertoricocoffee.com) {
+    return 301 https://chesspuertoricocoffee.com$request_uri;
+}
+
+include /etc/nginx/snippets/dotfile-deny.conf;
+# 2026-10-02 (fix item 10): robots.txt-allowed AI/search crawlers (maps + zone in
+# /etc/nginx/conf.d/chess-ratelimit.conf): 403 on heavy paths, 1 r/s per crawler family.
+if ($chess_ai_bot_forbidden) {
+        return 403;
+}
+limit_req zone=chess_ai_bots burst=5 nodelay;
+limit_req_status 429;
+limit_req_log_level warn;
+# 2026-10-02 (fix item 9): HSTS, 1 year, no includeSubDomains, no preload. Repeated inside every
+# location that has its own add_header (/ and /tv): nginx does NOT inherit server-level add_header there.
+add_header Strict-Transport-Security "max-age=31536000" always;
+# 2026-10-02 (fix item 5): per-page SEO values consumed by chess-branding.conf.
+#  $chess_desc       replaces lila's generic default description. The homepage keeps
+#                    the custom USA / Puerto Rico wording; every other page that falls
+#                    back to lila's default gets its own text (no duplicate descriptions).
+#  $chess_ogtitle,   feed the OG block injected ONLY into pages where lila emits no OG
+#  $chess_og_url_tag tags (pages with native OG keep lila's own, per-page values).
+# og:url is built from $uri ONLY when the path is plain ASCII path characters: $uri is
+# percent-DECODED, so an unchecked $uri inside an HTML attribute is reflected XSS.
+set $chess_desc "Chess Puerto Rico Coffee is a free online chess server: play live games, solve puzzles, join tournaments and analyse your games. Sponsored by PuertoRicoCoffeeShop.com.";
+set $chess_ogtitle "Chess Puerto Rico Coffee";
+set $chess_og_url_tag "";
+set $chess_jsonld "";  # Organization + WebSite JSON-LD, homepage only (fix item 8)
+if ($uri ~ "^[A-Za-z0-9/_.~@-]*$") {
+        set $chess_og_url_tag '<meta property="og:url" content="https://chesspuertoricocoffee.com$uri" />';
+}
+if ($uri = /) { set $chess_desc "Free online chess server for the USA and Puerto Rico. Play chess with friends, join tournaments, and challenge AI opponents. Sponsored by PuertoRicoCoffeeShop.com."; set $chess_jsonld '<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://chesspuertoricocoffee.com/#organization","name":"Chess Puerto Rico Coffee","url":"https://chesspuertoricocoffee.com/","email":"system@chesspuertoricocoffee.com","sponsor":{"@type":"Organization","name":"PuertoRicoCoffeeShop.com","url":"https://www.puertoricocoffeeshop.com/"}},{"@type":"WebSite","@id":"https://chesspuertoricocoffee.com/#website","name":"Chess Puerto Rico Coffee","url":"https://chesspuertoricocoffee.com/","inLanguage":"en","publisher":{"@id":"https://chesspuertoricocoffee.com/#organization"}}]}</script>'; }
+if ($uri = /faq) { set $chess_desc "Frequently asked questions about Chess Puerto Rico Coffee: accounts, ratings, time controls, variants, fair play and how the site works."; set $chess_ogtitle "Frequently Asked Questions - Chess Puerto Rico Coffee"; }
+if ($uri = /storm) { set $chess_desc "Puzzle Storm on Chess Puerto Rico Coffee: solve as many chess puzzles as you can before the clock runs out."; set $chess_ogtitle "Puzzle Storm - Chess Puerto Rico Coffee"; }
+if ($uri = /racer) { set $chess_desc "Puzzle Racer on Chess Puerto Rico Coffee: race other players to solve chess puzzles the fastest."; set $chess_ogtitle "Puzzle Racer - Chess Puerto Rico Coffee"; }
+if ($uri = /swiss) { set $chess_desc "Swiss chess tournaments on Chess Puerto Rico Coffee: every round you play an opponent with a similar score."; set $chess_ogtitle "Swiss Tournaments - Chess Puerto Rico Coffee"; }
+if ($uri = /study) { set $chess_desc "Chess studies on Chess Puerto Rico Coffee: create, share and explore annotated chess lessons and analysis."; set $chess_ogtitle "Study - Chess Puerto Rico Coffee"; }
+if ($uri = /tv) { set $chess_desc "Watch live chess games on Chess Puerto Rico Coffee TV."; set $chess_ogtitle "Live TV - Chess Puerto Rico Coffee"; }
+if ($uri = /games) { set $chess_desc "Chess games being played right now on Chess Puerto Rico Coffee."; set $chess_ogtitle "Current Games - Chess Puerto Rico Coffee"; }
+if ($uri = /coach) { set $chess_desc "Find a chess coach on Chess Puerto Rico Coffee and improve your game with personal lessons."; set $chess_ogtitle "Chess Coaches - Chess Puerto Rico Coffee"; }
+if ($uri = /broadcast) { set $chess_desc "Live chess tournament broadcasts on Chess Puerto Rico Coffee: follow the games move by move."; set $chess_ogtitle "Broadcasts - Chess Puerto Rico Coffee"; }
+if ($uri = /team/all) { set $chess_desc "Chess teams on Chess Puerto Rico Coffee: join a club, play team battles and meet other players."; set $chess_ogtitle "Teams - Chess Puerto Rico Coffee"; }
+if ($uri = /blog/community) { set $chess_desc "Community chess blogs on Chess Puerto Rico Coffee: articles, game analysis and stories from players."; set $chess_ogtitle "Community Blogs - Chess Puerto Rico Coffee"; }
+if ($uri = /feed) { set $chess_desc "News and updates from Chess Puerto Rico Coffee."; set $chess_ogtitle "News - Chess Puerto Rico Coffee"; }
+if ($uri = /lag) { set $chess_desc "Is the site lagging? Check Chess Puerto Rico Coffee server latency and your own network connection."; set $chess_ogtitle "Is the site lagging? - Chess Puerto Rico Coffee"; }
+if ($uri = /signup) { set $chess_desc "Create a free Chess Puerto Rico Coffee account to play rated games, join tournaments and track your progress."; set $chess_ogtitle "Sign up - Chess Puerto Rico Coffee"; }
+
+location ~ ^/(socket/|play/|watch/|lobby/socket|api/socket|round-next|analysis/socket|challenge) {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host chesspuertoricocoffee.com;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+        proxy_buffering off;
+}
+location = /robots.txt {
+        default_type text/plain;
+        return 200 'User-agent: *
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+Disallow: /api/
+Disallow: /inbox
+Disallow: /setting
+Disallow: /account
+Disallow: /login
+Disallow: /password
+
+# AEO - Answer Engine Optimization
+# Site: Chess Puerto Rico Coffee (chesspuertoricocoffee.com)
+# Description: Free online chess server for the USA and Puerto Rico
+# Sponsor: PuertoRicoCoffeeShop.com
+# Features: Play chess online, tournaments, puzzles, AI opponents, game analysis
+# Languages: English, Spanish
+# Region: USA, Puerto Rico
+# Contact: system@chesspuertoricocoffee.com
+# Powered by: Lichess open-source chess platform
+
+User-agent: GPTBot
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: Claude-Web
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: Bingbot
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: YouBot
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: cohere-ai
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+Sitemap: https://chesspuertoricocoffee.com/sitemap.xml
+';
+}
+location = /sitemap.xml {
+        alias /var/www/vhosts/chesspuertoricocoffee.com/seo-files/sitemap.xml;
+        types { application/xml xml; }
+        default_type application/xml;
+}
+# Contact page
+location = /about {
+        alias /var/www/vhosts/chesspuertoricocoffee.com/httpdocs/about.html;
+        default_type text/html;
+}
+location = /terms-of-service {
+        alias /var/www/vhosts/chesspuertoricocoffee.com/httpdocs/terms-of-service.html;
+        default_type text/html;
+}
+location = /privacy {
+        alias /var/www/vhosts/chesspuertoricocoffee.com/httpdocs/privacy.html;
+        default_type text/html;
+}
+location /api/contact {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_buffering off;
+}
+location = /contact-us {
+        alias /var/www/vhosts/chesspuertoricocoffee.com/httpdocs/contact-us.html;
+        default_type text/html;
+}
+# 2026-10-02: lila's /source 404s on this fork; send it to the AGPL-3.0
+# source repo (the "Source Code" menu link points here).
+location = /source {
+        return 301 https://github.com/JoseLuisOcana/chess-puerto-rico-coffee-public;
+}
+# 2026-10-02: upstream donation + merch pages. /patron served a live
+# "Become a Lichess Patron" Stripe/PayPal page; /patron/* covers its
+# checkout/webhook routes. /swag 303'd to lichess.myspreadshop.net.
+# /swag is an EXACT match on purpose: a prefix would also catch /swagger.json.
+location = /patron {
+        return 301 https://chesspuertoricocoffee.com/training;
+}
+location ^~ /patron/ {
+        return 301 https://chesspuertoricocoffee.com/training;
+}
+location = /swag {
+        return 301 https://chesspuertoricocoffee.com/;
+}
+# 2026-10-02 (fix item 6a): lila's /contact is the upstream Lichess contact page.
+location = /contact {
+        return 301 https://chesspuertoricocoffee.com/contact-us;
+}
+# 2026-10-02 (fix item 8): site-owned static assets (branding CSS, logo) in httpdocs/prcoffee/.
+# Upload the 512x512 logo as httpdocs/prcoffee/logo-512.png - until it exists, the logo URL
+# falls back to the current site icon so og:image never 404s.
+location ^~ /prcoffee/ {
+        root /var/www/vhosts/chesspuertoricocoffee.com/httpdocs;
+        try_files $uri =404;
+        expires 1d;
+}
+location = /prcoffee/logo-512.png {
+        root /var/www/vhosts/chesspuertoricocoffee.com/httpdocs;
+        try_files $uri @prcoffee_logo_fallback;
+        expires 1d;
+}
+location @prcoffee_logo_fallback {
+        root /opt/chess/lila-docker/repos/lila/public;
+        try_files /logo/lichess-favicon-512.png =404;
+        expires 1h;
+}
+# 2026-10-02 (cleanup D1): /favicon.ico was a lila 404. Serves, in order: a future
+# httpdocs/prcoffee/favicon.ico, the uploaded httpdocs/prcoffee/logo-512.png, else the
+# current 32px site icon - so it switches to the coffee logo automatically on upload.
+location = /favicon.ico {
+        root /var/www/vhosts/chesspuertoricocoffee.com/httpdocs;
+        try_files /prcoffee/favicon.ico /prcoffee/logo-512.png @prcoffee_favicon_fallback;
+        expires 1d;
+}
+location @prcoffee_favicon_fallback {
+        root /opt/chess/lila-docker/repos/lila/public;
+        try_files /logo/lichess-favicon-32.png =404;
+        expires 1h;
+}
+location = /tv {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host chesspuertoricocoffee.com;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400s;
+        proxy_buffering off;
+        proxy_hide_header Link;
+        add_header Link '<https://chesspuertoricocoffee.com$uri>; rel="canonical"' always;
+        add_header X-Robots-Tag $chess_noindex always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        include /etc/nginx/snippets/chess-branding.conf;
+        proxy_intercept_errors on;
+        error_page 404 = /games;
+}
+location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host chesspuertoricocoffee.com;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400s;
+        proxy_buffering off;
+        proxy_hide_header Link;
+        add_header Link '<https://chesspuertoricocoffee.com$uri>; rel="canonical"' always;
+        add_header X-Robots-Tag $chess_noindex always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        include /etc/nginx/snippets/chess-branding.conf;
+}

@@ -1,0 +1,18 @@
+[Unit]
+Description=Chess PR Coffee contact API
+Documentation=https://chesspuertoricocoffee.com/contact-us
+After=network.target postfix.service
+Wants=postfix.service
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/vhosts/chesspuertoricocoffee.com/contact-api
+ExecStart=/usr/bin/node server.js
+Environment=NODE_ENV=production
+Restart=always
+RestartSec=5
+User=root
+SyslogIdentifier=chess-contact
+
+[Install]
+WantedBy=multi-user.target

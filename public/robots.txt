@@ -1,8 +1,72 @@
 User-agent: *
 Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
 Disallow: /api/
 Disallow: /inbox
 Disallow: /setting
 Disallow: /account
+Disallow: /login
+Disallow: /password
+
+# AEO - Answer Engine Optimization
+# Site: Chess Puerto Rico Coffee (chesspuertoricocoffee.com)
+# Description: Free online chess server for the USA and Puerto Rico
+# Sponsor: PuertoRicoCoffeeShop.com
+# Features: Play chess online, tournaments, puzzles, AI opponents, game analysis
+# Languages: English, Spanish
+# Region: USA, Puerto Rico
+# Contact: system@chesspuertoricocoffee.com
+# Powered by: Lichess open-source chess platform
+
+User-agent: GPTBot
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: Claude-Web
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: Bingbot
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: YouBot
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
+
+User-agent: cohere-ai
+Allow: /
+Disallow: /opening/*/
+Disallow: /*/opening/*/
 
 Sitemap: https://chesspuertoricocoffee.com/sitemap.xml

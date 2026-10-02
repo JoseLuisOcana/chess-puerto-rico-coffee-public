@@ -10,8 +10,12 @@ services:
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
     volumes:
       - ./conf/elasticsearch/synonyms:/usr/share/elasticsearch/config/synonyms
+      - es_data:/usr/share/elasticsearch/data
     ports:
-      - 9200:9200
+      # 2026-09-13: loopback-bound. Published on 0.0.0.0 these were internet-reachable
+      # (docker DNATs in PREROUTING, bypassing the host's INPUT DROP policy). Every
+      # consumer addresses this service by its docker service name, never the host port.
+      - 127.0.0.1:9200:9200
     profiles:
       - search
 
@@ -21,7 +25,10 @@ services:
     volumes:
       - ./conf/elasticvue.json:/usr/share/nginx/html/api/default_clusters.json
     ports:
-      - 8092:8080
+      # 2026-09-13: loopback-bound. Published on 0.0.0.0 these were internet-reachable
+      # (docker DNATs in PREROUTING, bypassing the host's INPUT DROP policy). Every
+      # consumer addresses this service by its docker service name, never the host port.
+      - 127.0.0.1:8092:8080
     profiles:
       - search
 
@@ -103,3 +110,13 @@ services:
     
     profiles:
       - utils
+
+volumes:
+  # Pinned 2026-09-13: elasticsearch had NO mount for its data dir at all — the
+  # index lived in the container writable layer, so ANY recreate destroyed it.
+  # The volume was created manually and seeded from the container's live data
+  # (/root/es-index-backup-2026-09-13), then chowned to 1000:0. external:true so
+  # compose never creates or deletes it — it survives even `down -v`.
+  es_data:
+    external: true
+    name: lila-docker_es_data

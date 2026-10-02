@@ -1,0 +1,20 @@
+/* chesspuertoricocoffee.com branding - served from /prcoffee/branding.css (2026-10-02, fix item 11).
+ * Moved out of the inline nginx sub_filter '</body>' injection so CSP can be enforced later.
+ * Part 1: the former inline style="" attributes, 1:1, each !important so they keep the
+ *         priority inline styles had over lila's CSS. (The AGPL footer's font-family was
+ *         silently broken inline - an unescaped quote cut the attribute; it applies now.)
+ * Part 2: the former <style> block, VERBATIM and LAST, so its mobile @media overrides still win. */
+
+#prcoffe-sponsor{position:fixed!important;bottom:0!important;left:0!important;right:0!important;z-index:99999!important;background:linear-gradient(135deg,#1a0e05 0%,#2d1a0d 30%,#1a0e05 100%)!important;border-top:2px solid #8B4513!important;padding:12px 20px!important;text-align:center!important;font-family:system-ui,-apple-system,sans-serif!important;box-shadow:0 -4px 20px rgba(0,0,0,0.5)!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:16px!important;flex-wrap:wrap!important}
+#prcoffe-sponsor .prc-sp-g1{display:flex!important;align-items:center!important;gap:8px!important}
+#prcoffe-sponsor .prc-sp-i1{font-size:28px!important}
+#prcoffe-sponsor .prc-sp-label{color:#D4A76A!important;font-size:11px!important;text-transform:uppercase!important;letter-spacing:3px!important;font-weight:600!important}
+#prcoffe-sponsor a{color:#F5DEB3!important;font-size:20px!important;font-weight:700!important;text-decoration:none!important;letter-spacing:1px!important;text-shadow:0 2px 4px rgba(0,0,0,0.3)!important}
+#prcoffe-sponsor .prc-sp-g2{display:flex!important;align-items:center!important;gap:6px!important}
+#prcoffe-sponsor .prc-sp-i2{font-size:28px!important}
+#prcoffe-sponsor .prc-sp-free{color:#8B7355!important;font-size:10px!important;letter-spacing:2px!important}
+.prc-agpl{text-align:center!important;padding:12px 20px!important;font-size:11px!important;color:#888!important;background:#1a1a1a!important;border-top:1px solid #333!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important}
+.prc-agpl a{color:#aaa!important;text-decoration:underline!important}
+
+/* Part 2: former <style> block (verbatim) */
+body{padding-bottom:60px!important;}header#top{background:linear-gradient(135deg,#1a0e05 0%,#2d1a0d 50%,#1a0e05 100%)!important;border-bottom:1px solid #8B4513!important;}.site-name{color:#F5DEB3!important;font-size:1.1em!important;font-weight:700!important;}.site-icon{color:#D4A76A!important;}.button-metal{background:linear-gradient(180deg,#8B6914 0%,#6B4F10 100%)!important;border-color:#A67C00!important;color:#F5DEB3!important;}.signup{background:linear-gradient(180deg,#8B6914 0%,#6B4F10 100%)!important;border-color:#A67C00!important;color:#F5DEB3!important;}.lobby__about a,.about-side a.blue{color:#D4A76A!important;}.lobby__support a{background:rgba(139,69,19,0.15)!important;border-color:rgba(139,69,19,0.3)!important;}.tour-spotlight{background:rgba(139,69,19,0.1)!important;border-color:rgba(139,69,19,0.2)!important;}.about-side{color:#8B7355!important;}@media(max-width:640px){#prcoffe-sponsor{padding:8px 12px!important;gap:8px!important;}#prcoffe-sponsor a{font-size:14px!important;}}.lobby__start__button--bots{display:none!important;}

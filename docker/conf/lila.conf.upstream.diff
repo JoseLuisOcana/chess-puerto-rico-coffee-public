@@ -1,19 +1,33 @@
---- /tmp/_upstream_lila.conf	2026-04-19 20:57:14.260171951 -0400
-+++ /tmp/chess-prcs-public-staging/docker/conf/lila.conf.example	2026-04-19 20:57:14.240171526 -0400
-@@ -1,7 +1,11 @@
+--- a/conf/lila.conf
++++ b/conf/lila.conf
+@@ -1,9 +1,13 @@
  include "base"
  include "version"
  
 -user.password.bpass.secret = "9qEYN0ThHer1KWLNekA76Q=="
-+user.password.bpass.secret = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
-+security.email_confirm.secret  = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
-+security.password_reset.secret = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
-+security.email_change.secret   = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
-+security.login_token.secret    = "CHANGEME_GENERATE_WITH_openssl_rand_hex_32"
- 
- net.site.name = "lila"
+-
+-net.site.name = "lila"
++user.password.bpass.secret = ${?LILA_BPASS_SECRET}
++security.email_confirm.secret  = ${?LILA_EMAIL_CONFIRM_SECRET}
++security.password_reset.secret = ${?LILA_PASSWORD_RESET_SECRET}
++security.email_change.secret   = ${?LILA_EMAIL_CHANGE_SECRET}
++security.login_token.secret    = ${?LILA_LOGIN_TOKEN_SECRET}
++# 2026-10-02: was "lila" (shown in page titles + header; nginx sub_filters patched over it)
++net.site.name = "Chess Puerto Rico Coffee"
  net.domain = ${?LILA_DOMAIN}
-@@ -21,11 +25,13 @@
+ net.socket.domains = [ ${?LILA_DOMAIN} ]
+ net.asset.base_url = ${?LILA_URL}
+@@ -13,9 +17,6 @@
+ mongodb.uri = "mongodb://mongodb?appName=lila"
+ redis.uri = "redis://redis"
+ 
+-explorer.internal_endpoint = "http://openingexplorer:9002"
+-explorer.endpoint = "http://localhost:8080/explorer/"
+-
+ game.gifUrl = "http://lila_gif:6175"
+ 
+ search.enabled = true
+@@ -24,17 +25,19 @@
  memo.picfit.endpointGet = ${?LILA_URL}
  memo.picfit.endpointPost = "http://picfit:3001"
  
@@ -32,13 +46,59 @@
  security.email_confirm.enabled = true
  
  push.firebase.mobile.url = "https://fcm.googleapis.com/v1/projects/lichess-testing-df65f/messages:send"
-@@ -52,3 +58,9 @@
- hcaptcha.enabled = false
- hcaptcha.public_key = "10000000-ffff-ffff-ffff-000000000001"
- hcaptcha.private_key = "0x0000000000000000000000000000000000000000"
+-push.firebase.mobile.jsonPath = "/opt/firebase-service-account.json"
++push.firebase.mobile.json = "/opt/firebase-service-account.json"
+ push.web.url = "http://lila_push:9054"
+-push.web.vapid_public_key = "BDTVzVZ3_f83JgH1SJmZrhg-FNZ36Sixc_zrR1-1ZGVHUPmFeU6Q_-JQLN8NF5niYW_1jRU47aPczYA0FbgUCus"
++push.web.vapid_public_key = "BDTVzVZ3_f83JgH1SJmZrhg-FNZ36Sixc_zrR1-1ZGVHUPmFeU6Q_-JQLN8NF5niYW_1jRU47aPczYA0FbgUCus="
+ 
+ swiss.bbpairing = "/opt/bbpPairings/bbpPairings.exe"
+ 
+@@ -48,18 +51,32 @@
+ plan.stripe.keys.secret = "sk_test_123"
+ plan.payPal.keys.public = "sb"
+ 
+-# streamer.twitch.endpoint = "http://caddy/static/twitch-streamers.json"
+-# streamer.twitch.client_id = "twitch-client-id"
+-# streamer.twitch.secret = "twitch-secret"
+-
+-turnstile.enabled = false
+-
+-# turnstile.site_key = "1x00000000000000000000AA" # Always passes; Visible; Test successful form submissions
+-# turnstile.site_key = "2x00000000000000000000AB" # Always fails; Visible; Test error handling and retry logic
+-# turnstile.site_key = "1x00000000000000000000BB" # Always passes; Invisible; Test invisible widget success flows
+-# turnstile.site_key = "2x00000000000000000000BB" # Always fails; Invisible; Test invisible widget error handling
+-turnstile.site_key = "3x00000000000000000000FF" # Forces interactive challenge; Visible; Test user interaction scenarios
+-
+-turnstile.secret_key = "1x0000000000000000000000000000000AA" # Always passes validation; Test successful token validation
+-# turnstile.secret_key = "2x0000000000000000000000000000000AA" # Always fails validation; Test validation error handling
+-# turnstile.secret_key = "3x0000000000000000000000000000000AA" # Returns "token already spent" error; Test duplicate token handling
++streamer.twitch.endpoint = "http://caddy/static/twitch-streamers.json"
++streamer.twitch.client_id = "twitch-client-id"
++streamer.twitch.secret = "twitch-secret"
++
++hcaptcha.enabled = false
++hcaptcha.public_key = "10000000-ffff-ffff-ffff-000000000001"
++hcaptcha.private_key = "CHANGEME_HCAPTCHA_PRIVATE_KEY"
 +
 +# Task 6+7: Opening explorer + tablebase via public lichess endpoints
 +explorer.internal_endpoint = "https://explorer.lichess.ovh"
 +explorer.endpoint = "https://explorer.lichess.ovh"
-+explorer.oauth_token = "CHANGEME_LICHESS_OAUTH_TOKEN"
++explorer.oauth_token = ${?LILA_EXPLORER_OAUTH_TOKEN}
 +explorer.tablebase_endpoint = "https://tablebase.lichess.ovh"
++
++# 2026-09-13: trust the reverse-proxy chain so lila sees REAL client IPs.
++# Without this, every one of lila's ~28 IP-keyed rate limiters keyed on the Caddy
++# container's docker IP (verified: every ratelimit line in all.log read 172.18.0.4),
++# collapsing them into a single global bucket. That is an availability bug, not just a
++# weak control - on 2026-08-11 one client exhausted a 15/min image-export budget shared
++# by every visitor.
++#
++# SAFE ONLY BECAUSE the proxy ports are not externally reachable (verified 2026-09-13):
++#   - compose.yml binds 8080/9664 to 127.0.0.1, so the DNAT rule is scoped -d 127.0.0.1/32
++#   - DOCKER-USER drops external traffic to those ports (docker-port-guard.service)
++#   - lila's own :9663 is never published on the host
++# If any of those change, X-Forwarded-For becomes spoofable and this must be reverted.
++# Chain is: client -> nginx (adds X-Forwarded-For) -> 127.0.0.1:8080 -> Caddy -> lila:9663
++play.http.forwarded.version = x-forwarded
++play.http.forwarded.trustedProxies = ["172.18.0.0/16", "127.0.0.1", "::1"]

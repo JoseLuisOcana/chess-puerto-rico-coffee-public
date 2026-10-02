@@ -28,9 +28,12 @@ by AGPL-3.0.
 | `lila-modifications/` | Direct modifications to upstream lila Scala source code, mirroring the upstream directory structure |
 | `caddy/` | Modified Caddyfile with case-insensitive WebSocket matcher |
 | `docker/` | docker-compose overrides, sanitized .env example, sanitized lila.conf.example |
-| `nginx/` | Custom nginx configs (Plesk vhost + parallel system config, plus the branding sub_filter snippet) |
+| `nginx/` | Live nginx vhost, branding + dotfile-deny snippets, http-context `conf.d/` maps (incl. crawler rate limiting), Plesk pre-staging copy |
 | `public/static/` | Custom static pages (about, privacy, terms, contact) |
 | `public/` | Custom robots.txt and sitemap.xml |
+| `ops/` | Deployment scripts, cron entries and systemd units (sanitized) |
+| `contact-api/` | Node.js contact-form backend (sanitized) |
+| `public/static/prcoffee/` | Site branding stylesheet served at `/prcoffee/branding.css` |
 | `puzzle-import/` | Standalone Python utility to import the public Lichess puzzle database into MongoDB |
 | `LICENSE` | Full AGPL-3.0 license text |
 | `COPYRIGHT` | Copyright and upstream attribution |

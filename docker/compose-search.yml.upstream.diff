@@ -1,10 +1,101 @@
 --- a/compose-search.yml
 +++ b/compose-search.yml
-@@ -7,6 +7,7 @@
+@@ -1,4 +1,3 @@
+----
+ services:
+   elasticsearch:
+     image: elasticsearch:7.17.4
+@@ -8,21 +7,31 @@
        - http.cors.allow-origin=/.*/
        - http.cors.enabled=true
        - xpack.security.enabled=false
 +      - ES_JAVA_OPTS=-Xms512m -Xmx512m
      volumes:
        - ./conf/elasticsearch/synonyms:/usr/share/elasticsearch/config/synonyms
++      - es_data:/usr/share/elasticsearch/data
      ports:
+-      - 9200:9200
++      # 2026-09-13: loopback-bound. Published on 0.0.0.0 these were internet-reachable
++      # (docker DNATs in PREROUTING, bypassing the host's INPUT DROP policy). Every
++      # consumer addresses this service by its docker service name, never the host port.
++      - 127.0.0.1:9200:9200
+     profiles:
+       - search
++
+   elasticvue:
+     image: cars10/elasticvue:1.8.0
+     restart: unless-stopped
+     volumes:
+       - ./conf/elasticvue.json:/usr/share/nginx/html/api/default_clusters.json
+     ports:
+-      - 8092:8080
++      # 2026-09-13: loopback-bound. Published on 0.0.0.0 these were internet-reachable
++      # (docker DNATs in PREROUTING, bypassing the host's INPUT DROP policy). Every
++      # consumer addresses this service by its docker service name, never the host port.
++      - 127.0.0.1:8092:8080
+     profiles:
+       - search
++
+   lila_search_app:
+     image: ghcr.io/lichess-org/lila-search-app:latest
+     volumes:
+@@ -39,6 +48,7 @@
+     restart: unless-stopped
+     profiles:
+       - search
++
+   lila_search_ingestor:
+     image: ghcr.io/lichess-org/lila-search-ingestor-app:latest
+     volumes:
+@@ -64,6 +74,7 @@
+     restart: unless-stopped
+     profiles:
+       - search
++
+   lila_search_ingestor_cli:
+     image: ghcr.io/lichess-org/lila-search-ingestor-cli:latest
+     volumes:
+@@ -74,21 +85,38 @@
+       - MONGO_STUDY_URI=mongodb://mongodb:27017
+       - MONGO_STUDY_DATABASE=lichess
+       - ELASTIC_URI=http://elasticsearch:9200
++
+       - INGESTOR_FORUM_TIME_WINDOWS=1
+       - INGESTOR_FORUM_MAX_POST_LENGTH=5000
++
+       - INGESTOR_TEAM_TIME_WINDOWS=1
++
+       - INGESTOR_STUDY_BATCH_SIZE=100
+       - INGESTOR_STUDY_INTERVAL=30
++
+       - INGESTOR_GAME_BATCH_SIZE=100
+       - INGESTOR_GAME_TIME_WINDOWS=2
+       - INGESTOR_GAME_START_AT=0
++
+       - JAVA_TOOL_OPTIONS=-Dlogback.configurationFile=/opt/config/logback.xml
+       - KV_STORE_PATH=/tmp/json.store
++
+     command:
+-      - index
+-      - --all
+-      - --since
+-      - '0'
+-      - --refresh
++      - "index"
++      - "--all"
++      - "--since"
++      - "0"
++      - "--refresh"
++    
+     profiles:
+       - utils
++
++volumes:
++  # Pinned 2026-09-13: elasticsearch had NO mount for its data dir at all — the
++  # index lived in the container writable layer, so ANY recreate destroyed it.
++  # The volume was created manually and seeded from the container's live data
++  # (/root/es-index-backup-2026-09-13), then chowned to 1000:0. external:true so
++  # compose never creates or deletes it — it survives even `down -v`.
++  es_data:
++    external: true
++    name: lila-docker_es_data

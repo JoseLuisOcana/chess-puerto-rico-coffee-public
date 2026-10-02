@@ -1,0 +1,14 @@
+# /etc/cron.d/chess-daily-puzzle-recycle
+#
+# 2026-10-02: keeps /training/daily from running dry on the 3,000-puzzle seed.
+# lila never reuses a daily puzzle and only 37 are eligible, so every 30 days
+# they are recycled. See /usr/local/bin/chess-recycle-daily-puzzles.sh.
+# REMOVE after the full Lichess puzzle import.
+#
+# Silent on success (log: /var/log/chess-daily-puzzle-recycle.log); cron mails on error.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=admin@example.com   # sanitized: set your admin address
+
+15 4 * * * root /usr/local/bin/chess-recycle-daily-puzzles.sh
