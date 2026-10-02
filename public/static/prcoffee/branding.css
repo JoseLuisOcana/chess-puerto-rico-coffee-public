@@ -18,3 +18,11 @@
 
 /* Part 2: former <style> block (verbatim) */
 body{padding-bottom:60px!important;}header#top{background:linear-gradient(135deg,#1a0e05 0%,#2d1a0d 50%,#1a0e05 100%)!important;border-bottom:1px solid #8B4513!important;}.site-name{color:#F5DEB3!important;font-size:1.1em!important;font-weight:700!important;}.site-icon{color:#D4A76A!important;}.button-metal{background:linear-gradient(180deg,#8B6914 0%,#6B4F10 100%)!important;border-color:#A67C00!important;color:#F5DEB3!important;}.signup{background:linear-gradient(180deg,#8B6914 0%,#6B4F10 100%)!important;border-color:#A67C00!important;color:#F5DEB3!important;}.lobby__about a,.about-side a.blue{color:#D4A76A!important;}.lobby__support a{background:rgba(139,69,19,0.15)!important;border-color:rgba(139,69,19,0.3)!important;}.tour-spotlight{background:rgba(139,69,19,0.1)!important;border-color:rgba(139,69,19,0.2)!important;}.about-side{color:#8B7355!important;}@media(max-width:640px){#prcoffe-sponsor{padding:8px 12px!important;gap:8px!important;}#prcoffe-sponsor a{font-size:14px!important;}}.lobby__start__button--bots{display:none!important;}
+
+/* 2026-10-02: header logo - the Chess Puerto Rico Coffee pawn replaces the Lichess knight glyph
+   (data-icon). 1em x 1em of the icon's own font-size (lila: 24px, 36px on wide screens), so the
+   height is unchanged at every breakpoint; lila's responsive display rules are left alone. */
+.site-title .site-icon::before{content:none!important}
+.site-title .site-icon{width:1em!important;height:1em!important;background:url(/prcoffee/favicon-128.png) center/contain no-repeat!important;color:transparent!important}
+/* 2026-10-02: puzzle Zen-mode "home" button showed the Lichess knight SVG (white / black on light theme). */
+#zenzone .zen-home,html.light #zenzone .zen-home{background-image:url(/prcoffee/favicon-128.png)!important;background-size:2em 2em!important}

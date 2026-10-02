@@ -22,6 +22,15 @@ source-disclosure requirements.
   project, and `Permissions-Policy` re-emitted without upstream hosts.
 - (2026-10) Sponsor bar and AGPL footer styling moved from inline styles
   into `public/static/prcoffee/branding.css` (served at `/prcoffee/branding.css`).
+- (2026-10) **Logo:** the Lichess knight is replaced everywhere it appeared —
+  favicons, Safari mask icon (removed), Open Graph image, web-app manifest
+  (`public/static/prcoffee/manifest.json`: name "Chess Puerto Rico Coffee",
+  short_name "Chess PR Coffee"), apple-touch icon, JSON-LD logo, the header
+  icon and the puzzle Zen-mode home button — by the Chess Puerto Rico Coffee
+  coffee-bean pawn. The logo files in `public/static/prcoffee/`
+  (`logo-512.png`, `favicon-*.png`, `favicon.ico`, `apple-touch-icon.png`) are
+  this site's own original artwork, included so the deployment source is
+  complete; they are not part of upstream Lichess.
 
 ## 2. Configuration
 

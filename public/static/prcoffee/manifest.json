@@ -1,0 +1,47 @@
+{
+  "name": "Chess Puerto Rico Coffee",
+  "short_name": "Chess PR Coffee",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#161512",
+  "theme_color": "#161512",
+  "description": "Free online chess server for the USA and Puerto Rico. Play chess with friends, join tournaments, and challenge AI opponents. Sponsored by PuertoRicoCoffeeShop.com.",
+  "icons": [
+    {
+      "src": "/prcoffee/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/prcoffee/favicon-64.png",
+      "sizes": "64x64",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/prcoffee/favicon-128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/prcoffee/favicon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/prcoffee/favicon-256.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/prcoffee/favicon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
