@@ -24,6 +24,10 @@ search.endpoint = "http://lila_search_app:9673"
 
 memo.picfit.endpointGet = ${?LILA_URL}
 memo.picfit.endpointPost = "http://picfit:3001"
+# 2026-10-02: request-signing key shared with conf/picfit.json "secret_key" (must be identical).
+# Replaces the PUBLIC upstream default in base.conf, which let anyone sign /display URLs. Literal here, not
+# ${?ENV}: an env var needs a container recreate, which would drop the sbt/coursier caches.
+memo.picfit.secretKey = "REPLACE_WITH_RANDOM_64_HEX__SAME_AS_picfit.json_secret_key"
 
 mailer.primary.mock     = ${?MOCK_EMAIL}
 mailer.primary.tls      = true

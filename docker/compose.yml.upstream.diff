@@ -286,12 +286,13 @@
      build:
        context: docker
        dockerfile: picfit.Dockerfile
-     ports:
+-    ports:
 -      - 3001:3001
-+      # 2026-09-13: loopback-bound preemptively. picfit is currently STOPPED, but a
-+      # 0.0.0.0 publication would become internet-reachable the moment it starts.
-+      # nginx proxies /api/contact -> 127.0.0.1:3001, so loopback is sufficient.
-+      - 127.0.0.1:3001:3001
++    # 2026-10-02: NO host port. lila (memo.picfit.endpointPost = http://picfit:3001) and Caddy
++    # (/display* -> picfit:3001) reach picfit over lila-network only. The old 127.0.0.1:3001
++    # publication collided with chess-contact.service, which owns 127.0.0.1:3001 on the host
++    # (nginx /api/contact -> 127.0.0.1:3001 is the CONTACT API, not picfit).
++    restart: unless-stopped
      volumes:
        - ./conf/picfit.json:/mnt/config.json
        - ./docker/assets:/uploads

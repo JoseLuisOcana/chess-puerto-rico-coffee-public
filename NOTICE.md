@@ -66,6 +66,13 @@ source-disclosure requirements.
   off expensive paths. Also published: `nginx/snippets-dotfile-deny.conf`,
   `nginx/conf.d/*.conf` (http-context maps) and `nginx/vhost_nginx.conf.prestaging`
   (Plesk pre-staging copy of the vhost; not loaded today).
+- (2026-10) **picfit** (image uploads/thumbnails; `docker/compose.yml`,
+  `docker/conf/picfit.json.example`): host port publication removed (picfit is
+  reached only over the internal Docker network) and `restart: unless-stopped`
+  added; request signing enabled — picfit `secret_key` and lila
+  `memo.picfit.secretKey` set to the same private value, replacing the public
+  upstream default, so unsigned or forged `/display` requests (including remote
+  `url=` fetches) are rejected; picfit debug mode off.
 - (2026-10) **lila_push** VAPID subject changed to the site's own address
   (`docker/compose.yml`); MongoDB healthcheck script `docker/scripts/replica-set.js`
   enables mongod `quiet` mode.

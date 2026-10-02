@@ -1,0 +1,17 @@
+--- a/conf/picfit.json
++++ b/conf/picfit.json
+@@ -1,5 +1,5 @@
+ {
+-    "debug": true,
++    "debug": false,
+     "port": 3001,
+     "options": {
+         "enable_upload": true
+@@ -9,5 +9,6 @@
+             "type": "fs",
+             "location": "/uploads/"
+         }
+-    }
++    },
++    "secret_key": "REPLACE_WITH_RANDOM_64_HEX__SAME_AS_memo.picfit.secretKey"
+ }

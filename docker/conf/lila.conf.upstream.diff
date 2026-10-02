@@ -27,15 +27,21 @@
  game.gifUrl = "http://lila_gif:6175"
  
  search.enabled = true
-@@ -24,17 +25,19 @@
+@@ -23,18 +24,24 @@
+ 
  memo.picfit.endpointGet = ${?LILA_URL}
  memo.picfit.endpointPost = "http://picfit:3001"
- 
+-
 -mailer.primary.mock = ${?MOCK_EMAIL}
 -mailer.primary.tls = false
 -mailer.primary.host = "mailpit"
 -mailer.primary.port = 1025
 -mailer.primary.sender = "lichess.org <noreply@lichess.org>"
++# 2026-10-02: request-signing key shared with conf/picfit.json "secret_key" (must be identical).
++# Replaces the PUBLIC upstream default in base.conf, which let anyone sign /display URLs. Literal here, not
++# ${?ENV}: an env var needs a container recreate, which would drop the sbt/coursier caches.
++memo.picfit.secretKey = "REPLACE_WITH_RANDOM_64_HEX__SAME_AS_picfit.json_secret_key"
++
 +mailer.primary.mock     = ${?MOCK_EMAIL}
 +mailer.primary.tls      = true
 +mailer.primary.host     = "smtp.ionos.com"
@@ -54,7 +60,7 @@
  
  swiss.bbpairing = "/opt/bbpPairings/bbpPairings.exe"
  
-@@ -48,18 +51,32 @@
+@@ -48,18 +55,32 @@
  plan.stripe.keys.secret = "sk_test_123"
  plan.payPal.keys.public = "sb"
  
