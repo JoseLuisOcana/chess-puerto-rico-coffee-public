@@ -1,0 +1,14 @@
+# /etc/cron.d/chess-health-report
+#
+# 2026-10-03: weekly health report for chesspuertoricocoffee.com, e-mailed to system@chesspuertoricocoffee.com
+# through IONOS SMTP - Mondays 09:00 AST (server TZ America/Puerto_Rico, no DST; runs after Monday's 08:00
+# auto-feed and Sunday's video refresh + bgjobs cleanup). Subject starts with a check mark when all is OK,
+# a warning sign when something needs attention. Read-only. See /usr/local/bin/chess-health-report.sh.
+#
+# Silent on success (log: /var/log/chess-health-report.log); cron mails MAILTO only if sending fails.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=admin@example.com   # sanitized: set your admin address
+
+0 9 * * 1 root /usr/local/bin/chess-health-report.sh

@@ -33,7 +33,7 @@ by AGPL-3.0.
 | `public/` | Custom robots.txt and sitemap.xml |
 | `ops/` | Deployment scripts, cron entries and systemd units (sanitized) |
 | `contact-api/` | Node.js contact-form backend (sanitized) |
-| `public/static/prcoffee/` | Site branding stylesheet, logo, favicons, apple-touch icon, web-app manifest and the homepage video-strip script `videos.js` (served under `/prcoffee/`; its `videos.json` and `video-thumbs/` are generated on the server by `ops/chess-video-refresh.sh` and not published) |
+| `public/static/prcoffee/` | Site branding stylesheet, logo, favicons, apple-touch icon, web-app manifest, the homepage video-strip script `videos.js` and the sign-up age-confirmation helper `signup.js` (served under `/prcoffee/`; its `videos.json` and `video-thumbs/` are generated on the server by `ops/chess-video-refresh.sh` and not published) |
 | `puzzle-import/` | Standalone Python utility to import the public Lichess puzzle database into MongoDB |
 | `LICENSE` | Full AGPL-3.0 license text |
 | `COPYRIGHT` | Copyright and upstream attribution |

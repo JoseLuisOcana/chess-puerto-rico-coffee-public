@@ -35,6 +35,16 @@ source-disclosure requirements.
   violent words, "mate" puns, with real chess terms allowed - and YouTube must report the video as
   embeddable and not age-restricted) and serves thumbnails locally. Thumbnails and `videos.json` are
   generated data (the thumbnails belong to the video creators) and are not part of this repository.
+- (2026-10) **Sign-up age confirmation:** a required checkbox "I am 13 or older (or have parental
+  consent)." is added to lila's sign-up form by the nginx branding snippet (`sub_filter` at the end of the
+  agreement checkboxes, only on `/signup`); `public/static/prcoffee/signup.js` re-adds it if the anchor ever
+  moves and shows a clear message. The box has no `name`, so lila's server code is unchanged. The privacy
+  page (`public/static/privacy.html`) describes it and the embedded YouTube videos.
+- (2026-10) **Video embeds:** lila already embeds YouTube in privacy-enhanced mode (youtube-nocookie.com);
+  the branding snippet corrects the player's hardcoded `origin=https://lichess.org` to this site's domain.
+- (2026-10) **Weekly health report:** `ops/chess-health-report.sh` + cron (Mondays) e-mails a read-only
+  summary (backups, disk, TLS expiry, cron results, containers, error counts, memory) through the site's own
+  SMTP account; credentials are read at run time from a root-only file that is not published.
 - (2026-10) **Logo:** the Lichess knight is replaced everywhere it appeared —
   favicons, Safari mask icon (removed), Open Graph image, web-app manifest
   (`public/static/prcoffee/manifest.json`: name "Chess Puerto Rico Coffee",
