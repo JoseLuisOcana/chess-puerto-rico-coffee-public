@@ -44,3 +44,16 @@ accidental commits.
 This script is licensed under AGPL-3.0, matching the rest of this repository.
 Although it is standalone utility code (it does not link to or derive from
 lila source), the repository license is kept uniform for simplicity.
+
+## 2026-10 notes
+
+- `--upsert` updates existing puzzles (`$set` of the CSV fields, keeping lila-only fields such as
+  `day`, `users`, `vu`, `vd`) instead of skipping them. Typical run: `--batch 5000 --upsert`
+  inside a container on the lila Docker network (MongoDB is not published to the host).
+- The current Lichess CSV has an extra trailing `DailyDate` column; the script reads columns by
+  name and ignores it (importing it as lila's `day` would mark those puzzles as already used).
+- **Caveat:** lila's puzzle page loads each puzzle's source game from the local `game5`
+  collection (`modules/puzzle/src/main/GameJson.scala`). Puzzles imported from the CSV reference
+  lichess.org games that do not exist locally, so `/training` and `/streak` fail with
+  `Missing puzzle game <id>!`. Do not deploy a full import without also handling missing games.
+

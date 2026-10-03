@@ -68,7 +68,11 @@ services:
       - INGESTOR_STUDY_INTERVAL=30
       - INGESTOR_GAME_BATCH_SIZE=100
       - INGESTOR_GAME_TIME_WINDOWS=2
-      - INGESTOR_GAME_START_AT=0
+      # 2026-10-02: INGESTOR_GAME_START_AT=0 removed here (kept for the one-off _cli service below). It
+      # OVERRIDES the saved resume position, so the game ingestor restarted its change stream from 1970 on
+      # every start - which only works while the oplog still holds the replica set's very first entry. The
+      # 6.2M-puzzle import rotated the oplog for the first time -> ChangeStreamHistoryLost (286) -> crash loop.
+      # Unset = resume from the saved position, else from now (like the forum/team/ublog ingestors).
       - JAVA_TOOL_OPTIONS=-Dlogback.configurationFile=/opt/config/logback.xml
       - KV_STORE_PATH=/tmp/json.store
     restart: unless-stopped

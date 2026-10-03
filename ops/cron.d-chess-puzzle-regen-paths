@@ -1,0 +1,14 @@
+# /etc/cron.d/chess-puzzle-regen-paths
+#
+# STATUS 2026-10-02: PARKED (not installed) - the full puzzle import was rolled back, see NOTICE.md.
+#
+# 2026-10-02: rebuild lila's puzzle paths daily, off-peak (04:45 AST — after the 03:30 nightly mongodump).
+# Paths are what Puzzles / Storm / Streak / Racer / the daily puzzle select from; lila calls them stale after
+# 1 day. Upstream suggests hourly; daily is plenty at this site's traffic. See
+# /usr/local/bin/chess-puzzle-regen-paths.sh. Silent on success (log /var/log/chess-puzzle-regen-paths.log).
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=admin@example.com   # sanitized: set your admin address
+
+45 4 * * * root /usr/local/bin/chess-puzzle-regen-paths.sh

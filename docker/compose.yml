@@ -8,12 +8,23 @@ services:
     restart: unless-stopped
     command: mongod --bind_ip_all --replSet rs0 --wiredTigerCacheSizeGB 2
     stop_grace_period: 60s
+    # 2026-10-02: open-files limit 1024 -> 64000 (MongoDB's recommended minimum; mongod logged "Soft rlimits
+    # for open file descriptors too low"). With the full 6.2M-puzzle DB, the puzzle-path rebuild exhausted
+    # 1024 fds ("Too many open files" -> WiredTiger fassert -> mongod aborted and restarted at 23:35 UTC).
+    ulimits:
+      nofile:
+        soft: 64000
+        hard: 64000
     healthcheck:
       test: mongosh --quiet /scripts/replica-set.js
-      interval: 5s
+      # 2026-10-02: interval 5s -> 60s. Every check is a new mongosh connection (~4 mongod log lines),
+      # so 5s produced ~50k log lines/day. start_interval keeps boot fast: during start_period Docker
+      # checks every 5s, so the container still reports healthy within seconds of mongod being up.
+      interval: 60s
       timeout: 30s
-      start_period: 0s
-      retries: 30
+      start_period: 120s
+      start_interval: 5s
+      retries: 5
     volumes:
       - ./repos/lila:/lila
       - ./scripts:/scripts

@@ -1,6 +1,6 @@
 --- a/compose.yml
 +++ b/compose.yml
-@@ -1,23 +1,13 @@
+@@ -1,45 +1,45 @@
 ----
  include:
    - compose-lila-ws-${LILA_WS_CONTAINER:-image}.yml
@@ -23,10 +23,26 @@
 -    command: mongod --bind_ip_all --replSet rs0
 +    command: mongod --bind_ip_all --replSet rs0 --wiredTigerCacheSizeGB 2
 +    stop_grace_period: 60s
++    # 2026-10-02: open-files limit 1024 -> 64000 (MongoDB's recommended minimum; mongod logged "Soft rlimits
++    # for open file descriptors too low"). With the full 6.2M-puzzle DB, the puzzle-path rebuild exhausted
++    # 1024 fds ("Too many open files" -> WiredTiger fassert -> mongod aborted and restarted at 23:35 UTC).
++    ulimits:
++      nofile:
++        soft: 64000
++        hard: 64000
      healthcheck:
        test: mongosh --quiet /scripts/replica-set.js
-       interval: 5s
-@@ -27,19 +17,18 @@
+-      interval: 5s
++      # 2026-10-02: interval 5s -> 60s. Every check is a new mongosh connection (~4 mongod log lines),
++      # so 5s produced ~50k log lines/day. start_interval keeps boot fast: during start_period Docker
++      # checks every 5s, so the container still reports healthy within seconds of mongod being up.
++      interval: 60s
+       timeout: 30s
+-      start_period: 0s
+-      retries: 30
++      start_period: 120s
++      start_interval: 5s
++      retries: 5
      volumes:
        - ./repos/lila:/lila
        - ./scripts:/scripts
@@ -51,7 +67,7 @@
    lila:
      build:
        context: docker
-@@ -54,8 +43,15 @@
+@@ -54,8 +54,15 @@
      environment:
        - LILA_DOMAIN=${LILA_DOMAIN:-localhost:8080}
        - LILA_URL=${LILA_URL:-http://localhost:8080}
@@ -69,7 +85,7 @@
        - ENABLE_RATE_LIMITING=${ENABLE_RATE_LIMITING:-true}
      volumes:
        - ./repos/lila:/lila
-@@ -67,11 +63,22 @@
+@@ -67,11 +74,22 @@
        - ./conf/firebase-service-account.json:/opt/firebase-service-account.json:ro
      profiles:
        - base
@@ -93,7 +109,7 @@
      environment:
        - LILA_DOMAIN=${LILA_DOMAIN:-localhost:8080}
        - LILA_URL=${LILA_URL:-http://localhost:8080}
-@@ -81,16 +88,20 @@
+@@ -81,16 +99,20 @@
        - ./static:/static
      profiles:
        - base
@@ -114,7 +130,7 @@
    api_docs:
      build:
        context: docker
-@@ -99,10 +110,7 @@
+@@ -99,10 +121,7 @@
          GROUP_ID: ${GROUP_ID:-}
        dockerfile: ui.Dockerfile
      working_dir: /api/doc
@@ -126,7 +142,7 @@
      restart: unless-stopped
      user: ${USER_ID:-}:${GROUP_ID:-}
      ports:
-@@ -111,6 +119,7 @@
+@@ -111,6 +130,7 @@
        - ./repos/api:/api
      profiles:
        - api-docs
@@ -134,7 +150,7 @@
    chessground:
      build:
        context: docker
-@@ -118,10 +127,7 @@
+@@ -118,10 +138,7 @@
          USER_ID: ${USER_ID:-}
          GROUP_ID: ${GROUP_ID:-}
        dockerfile: ui.Dockerfile
@@ -146,7 +162,7 @@
      restart: unless-stopped
      user: ${USER_ID:-}:${GROUP_ID:-}
      ports:
-@@ -131,6 +137,7 @@
+@@ -131,6 +148,7 @@
        - ./.pnpm-store:/.pnpm-store
      profiles:
        - chessground
@@ -154,7 +170,7 @@
    pgn_viewer:
      build:
        context: docker
-@@ -138,10 +145,7 @@
+@@ -138,10 +156,7 @@
          USER_ID: ${USER_ID:-}
          GROUP_ID: ${GROUP_ID:-}
        dockerfile: ui.Dockerfile
@@ -166,7 +182,7 @@
      restart: unless-stopped
      user: ${USER_ID:-}:${GROUP_ID:-}
      ports:
-@@ -151,8 +155,9 @@
+@@ -151,8 +166,9 @@
        - ./.pnpm-store:/.pnpm-store
      profiles:
        - pgn-viewer
@@ -177,7 +193,7 @@
      working_dir: /lila-engine
      entrypoint: cargo run -- --bind 0.0.0.0:9666 --mongodb mongodb://mongodb
      restart: unless-stopped
-@@ -160,11 +165,15 @@
+@@ -160,11 +176,15 @@
      environment:
        - LILA_ENGINE_LOG=lila_engine=debug,tower_http=debug
      ports:
@@ -194,7 +210,7 @@
    lila_fishnet:
      build:
        context: docker
-@@ -183,16 +192,17 @@
+@@ -183,16 +203,17 @@
        - ./repos/lila-fishnet:/lila-fishnet
      profiles:
        - stockfish-play
@@ -213,7 +229,7 @@
    fishnet_analysis:
      image: niklasf/fishnet:2.12.0
      restart: unless-stopped
-@@ -202,6 +212,7 @@
+@@ -202,6 +223,7 @@
        - STATS_FILE=/stats.json
      profiles:
        - stockfish-analysis
@@ -221,7 +237,7 @@
    python:
      build:
        context: docker
-@@ -212,6 +223,7 @@
+@@ -212,6 +234,7 @@
        - ./scripts:/scripts
      profiles:
        - utils
@@ -229,7 +245,7 @@
    ui:
      build:
        context: docker
-@@ -222,7 +234,7 @@
+@@ -222,7 +245,7 @@
      restart: unless-stopped
      user: ${USER_ID:-}:${GROUP_ID:-}
      environment:
@@ -238,7 +254,7 @@
      volumes:
        - ./repos/lila:/lila
        - ./repos/chessground:/chessground
-@@ -230,50 +242,66 @@
+@@ -230,50 +253,66 @@
        - ./.pnpm-store:/.pnpm-store
      profiles:
        - utils
@@ -314,7 +330,7 @@
    mongo_express_primary:
      image: mongo-express:1.0.2-20-alpine3.19
      restart: unless-stopped
-@@ -286,6 +314,7 @@
+@@ -286,6 +325,7 @@
        - mongodb
      profiles:
        - mongo-express
@@ -322,7 +338,7 @@
    prometheus:
      image: prom/prometheus:v3.5.0
      volumes:
-@@ -294,6 +323,7 @@
+@@ -294,6 +334,7 @@
        - 9090:9090
      profiles:
        - monitoring
@@ -330,7 +346,7 @@
    influxdb:
      image: influxdb:2.7.12-alpine
      restart: unless-stopped
-@@ -309,10 +339,25 @@
+@@ -309,10 +350,25 @@
      profiles:
        - monitoring
  

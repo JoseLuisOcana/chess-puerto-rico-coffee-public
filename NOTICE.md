@@ -82,6 +82,13 @@ source-disclosure requirements.
   `memo.picfit.secretKey` set to the same private value, replacing the public
   upstream default, so unsigned or forged `/display` requests (including remote
   `url=` fetches) are rejected; picfit debug mode off.
+- (2026-10) **MongoDB** (`docker/compose.yml`): `ulimits nofile 64000` (the default
+  1024 crashed mongod during a puzzle-path rebuild with "Too many open files") and a
+  60-second healthcheck interval (5 s while starting) to cut log noise.
+- (2026-10) **Search ingestor** (`docker/compose-search.yml`): `INGESTOR_GAME_START_AT=0`
+  removed for the running ingestor — it overrides the saved resume position and fails
+  with `ChangeStreamHistoryLost` once the oplog has rotated.
+- (2026-10) **picfit**: `enable_delete` turned on, so lila's image deletes take effect.
 - (2026-10) **lila_push** VAPID subject changed to the site's own address
   (`docker/compose.yml`); MongoDB healthcheck script `docker/scripts/replica-set.js`
   enables mongod `quiet` mode.
@@ -92,6 +99,13 @@ source-disclosure requirements.
   (no lila code imports) that parses the public Lichess puzzle CSV
   dataset and loads it into the local MongoDB in the schema expected
   by lila's puzzle reader.
+- **puzzle-import/import_puzzles.py** (2026-10): `--upsert` mode added. Note: a full
+  import is not usable on its own — lila's puzzle page needs each puzzle's source game
+  in the local database (`GameJson.scala`), which a CSV import does not provide; the
+  2026-10 attempt was rolled back for that reason.
+- **ops/chess-puzzle-regen-paths.sh** (2026-10): wrapper for upstream's
+  `cron/mongodb-puzzle-regen-paths.js` (lock, logging, fails loudly); its cron entry is
+  included but not installed while only the seed puzzle set is loaded.
 - **ops/** (2026-10): deployment scripts and units — daily-puzzle recycling
   (`chess-recycle-daily-puzzles.sh` + cron), nightly MongoDB dump with read-back
   verification (`chess-mongodump.sh` + cron), and the contact-form service unit

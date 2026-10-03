@@ -22,7 +22,7 @@ import csv
 import re
 import sys
 import time
-from pymongo import MongoClient, InsertOne, WriteConcern
+from pymongo import MongoClient, InsertOne, UpdateOne, WriteConcern
 from pymongo.errors import BulkWriteError
 
 GAME_URL_RE = re.compile(r"^https?://lichess\.org/([^/#]+)")
@@ -68,6 +68,9 @@ def main():
                         help="Bulk insert batch size")
     parser.add_argument("--sleep", type=float, default=0.1,
                         help="Seconds to sleep between batches (WT eviction window)")
+    parser.add_argument("--upsert", action="store_true",
+                        help="UpdateOne($set, upsert=True) instead of InsertOne: refreshes puzzles that already exist "
+                             "(CSV fields only) and keeps lila-only fields such as day, users, vu, vd")
     parser.add_argument("--limit", type=int, default=0,
                         help="If >0, import only the first N rows (dry-run mode)")
     args = parser.parse_args()
@@ -78,7 +81,7 @@ def main():
     coll = client[args.db][args.coll]
 
     print(f"Importing {args.csv}")
-    print(f"  -> {args.db}.{args.coll}")
+    print(f"  -> {args.db}.{args.coll}  mode={'upsert ($set)' if args.upsert else 'insert'}  batch={args.batch}")
     if args.limit > 0:
         print(f"  DRY-RUN: limited to first {args.limit} rows")
     print()
@@ -111,7 +114,12 @@ def main():
         reader = csv.DictReader(f)
         for row in reader:
             try:
-                batch.append(InsertOne(parse_row(row)))
+                doc = parse_row(row)
+                if args.upsert:
+                    pid = doc.pop("_id")
+                    batch.append(UpdateOne({"_id": pid}, {"$set": doc}, upsert=True))
+                else:
+                    batch.append(InsertOne(doc))
             except (ValueError, KeyError) as e:
                 errors += 1
                 if errors <= 5:
