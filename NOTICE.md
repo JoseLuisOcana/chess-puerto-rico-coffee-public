@@ -22,6 +22,14 @@ source-disclosure requirements.
   project, and `Permissions-Policy` re-emitted without upstream hosts.
 - (2026-10) Sponsor bar and AGPL footer styling moved from inline styles
   into `public/static/prcoffee/branding.css` (served at `/prcoffee/branding.css`).
+- (2026-10) **Homepage "Chess Videos" strip:** `public/static/prcoffee/videos.js` (loaded on the
+  homepage only, via `$chess_videos` in the vhost and the `</head>` rule in the branding snippet)
+  renders the 4 newest videos of lila's own video library as cards linking to the site's own
+  `/video/<id>` pages; styles in `branding.css`. Its data file and thumbnails are written weekly by
+  `ops/chess-video-refresh.sh`, which adds new long-form videos only from the YouTube channels in
+  `ops/chess-video-channels.json` (public RSS feeds, no API key; Shorts and live streams skipped;
+  max 5 per channel per week) and serves thumbnails locally. Thumbnails and `videos.json` are
+  generated data (the thumbnails belong to the video creators) and are not part of this repository.
 - (2026-10) **Logo:** the Lichess knight is replaced everywhere it appeared —
   favicons, Safari mask icon (removed), Open Graph image, web-app manifest
   (`public/static/prcoffee/manifest.json`: name "Chess Puerto Rico Coffee",

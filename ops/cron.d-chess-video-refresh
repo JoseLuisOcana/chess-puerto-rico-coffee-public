@@ -1,0 +1,14 @@
+# /etc/cron.d/chess-video-refresh
+#
+# 2026-10-03: weekly refresh of the homepage "Chess Videos" strip - Sundays 07:00 AST (the server TZ is
+# America/Puerto_Rico, no DST). Adds new long-form videos ONLY from the channels in
+# /etc/chess-video-channels.json (max 5 per channel per week), rewrites
+# httpdocs/prcoffee/videos.json and the local thumbnails. See /usr/local/bin/chess-video-refresh.sh.
+#
+# Silent on success (log: /var/log/chess-video-refresh.log); cron mails on error.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=admin@example.com   # sanitized: set your admin address
+
+0 7 * * 0 root /usr/local/bin/chess-video-refresh.sh

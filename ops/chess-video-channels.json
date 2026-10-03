@@ -1,0 +1,168 @@
+{
+ "_comment": "Allowlist for /usr/local/bin/chess-video-refresh.sh. Built 2026-10-03 from the channels of the 50 videos then in lila's `video` collection; each channelId was read from that video's own YouTube watch page and each name from oEmbed. Only these channels can add videos. Edit by hand (and re-mirror to the AGPL repo) to change it.",
+ "builtAt": "2026-10-03T14:30:32Z",
+ "channels": [
+  {
+   "channelId": "UCOVfq3NNYjlYCz1iou69FwQ",
+   "name": "Anna Cramling",
+   "url": "https://www.youtube.com/@AnnaCramling",
+   "fromVideos": [
+    "9vjJb8W8mqQ"
+   ]
+  },
+  {
+   "channelId": "UCIPwwpJe1Vimoeqc4nKs4Kw",
+   "name": "BlitzStream",
+   "url": "https://www.youtube.com/@BlitzStream",
+   "fromVideos": [
+    "813QD5vW5-4"
+   ]
+  },
+  {
+   "channelId": "UC6HDXr-sNPnWLF_Q-y3KduA",
+   "name": "Chess Talk",
+   "url": "https://www.youtube.com/@ChessTalk",
+   "fromVideos": [
+    "USkSiL-TNQQ"
+   ]
+  },
+  {
+   "channelId": "UCd9RHivv7ryAQSS7Q8p1zgA",
+   "name": "Chessexplained",
+   "url": "https://www.youtube.com/@Chessexplained",
+   "fromVideos": [
+    "5fy1j_KDwKs",
+    "6l5yEc7l9-w",
+    "KDvikusk9lY"
+   ]
+  },
+  {
+   "channelId": "UCgRUc4wyyMCnULY_XWPYXmA",
+   "name": "Chessfactor",
+   "url": "https://www.youtube.com/@Chessfactor",
+   "fromVideos": [
+    "3WNAV8ettuQ",
+    "7AYAirF0D8w",
+    "DlGnYqoV5ZM",
+    "FXxgPK5AceU",
+    "Jf87lQByoa4",
+    "KkZOzMa9jNc",
+    "O8arEwebHSs",
+    "SrkP5xvjQZA",
+    "WUfNLax4WrA",
+    "XLOzK5gnjwI",
+    "ZTNO5R_u4Bw",
+    "_QdGeFXdujE",
+    "dQd7iTNYF4k",
+    "gpsZAim-mYc",
+    "vQ2Z9n43Ue8",
+    "wV5hI0rZi2E",
+    "wod7uXzkrTc"
+   ]
+  },
+  {
+   "channelId": "UCCDOQrpqLqKVcTCKzqarxLg",
+   "name": "ChessNetwork",
+   "url": "https://www.youtube.com/@ChessNetwork",
+   "fromVideos": [
+    "1vabvommn78",
+    "DZnv6EzMZMU",
+    "cdN8qqAiAIg",
+    "dKUG7qm4ZkM",
+    "lSBFXkngFNQ",
+    "phbYrGwgjHk"
+   ]
+  },
+  {
+   "channelId": "UCsDiImlR7w3lAt3tGUo-Z7Q",
+   "name": "Coach Kestony",
+   "url": "https://www.youtube.com/@Kestony",
+   "fromVideos": [
+    "6a5p8flI5wc"
+   ]
+  },
+  {
+   "channelId": "UCXy10-NEFGxQ3b4NVrzHw1Q",
+   "name": "Eric Rosen",
+   "url": "https://www.youtube.com/@eric-rosen",
+   "fromVideos": [
+    "DAaLGG66GtY",
+    "ZXfYnnhTd8o"
+   ]
+  },
+  {
+   "channelId": "UC6EnFbK-P5q0zeaqI5yobKg",
+   "name": "GMBenjaminFinegold",
+   "url": "https://www.youtube.com/@GMBenjaminFinegold",
+   "fromVideos": [
+    "HgF66_5lGiE",
+    "aIgApj-goYY",
+    "psPZ8fk00Jc"
+   ]
+  },
+  {
+   "channelId": "UCweCc7bSMX5J4jEH7HFImng",
+   "name": "GMHikaru",
+   "url": "https://www.youtube.com/@GMHikaru",
+   "fromVideos": [
+    "PbteFFxkZIc"
+   ]
+  },
+  {
+   "channelId": "UCQHX6ViZmPsWiYSFAyS0a3Q",
+   "name": "GothamChess",
+   "url": "https://www.youtube.com/@GothamChess",
+   "fromVideos": [
+    "49H728S_VjM",
+    "ECMMct_jnEM",
+    "Nc8rzTIfFCw"
+   ]
+  },
+  {
+   "channelId": "UC6hOVYvNn79Sl1Fc1vx2mYA",
+   "name": "John Bartholomew",
+   "url": "https://www.youtube.com/@JohnBartholomewChess",
+   "fromVideos": [
+    "Ao9iOeK_jvU"
+   ]
+  },
+  {
+   "channelId": "UCDUDDmslypVXYoUsZafHSUQ",
+   "name": "kingscrusher",
+   "url": "https://www.youtube.com/@kingscrusher",
+   "fromVideos": [
+    "bqRQuTti6iY",
+    "x2HfGNEKIwE"
+   ]
+  },
+  {
+   "channelId": "UCM-ONC2bCHytG2mYtKDmIeA",
+   "name": "Saint Louis Chess Club",
+   "url": "https://www.youtube.com/@STLChessClub",
+   "fromVideos": [
+    "fT2MVoS2kus",
+    "xh4sO1ICS_Q"
+   ]
+  },
+  {
+   "channelId": "UC9kP6NUvOS4_E7az0nfl7TQ",
+   "name": "The Chess Giant",
+   "url": "https://www.youtube.com/@TheChessGiant",
+   "fromVideos": [
+    "X7bC9Ii1HO4"
+   ]
+  },
+  {
+   "channelId": "UCHz5JQAUSkjxrosDIWCtEdw",
+   "name": "thechesswebsite",
+   "url": "https://www.youtube.com/@chesswebsite",
+   "fromVideos": [
+    "BnL3BqalJFI",
+    "Gssol4R3yMg",
+    "Ib8XaRKCAfo",
+    "WdexjTLH2So",
+    "s9Sbg2A8Go0"
+   ]
+  }
+ ]
+}
