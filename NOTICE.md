@@ -110,6 +110,13 @@ source-disclosure requirements.
   (`chess-recycle-daily-puzzles.sh` + cron), nightly MongoDB dump with read-back
   verification (`chess-mongodump.sh` + cron), and the contact-form service unit
   with its SMTP drop-in. E-mail addresses are sanitized.
+- **ops/chess-auto-feed.sh** (2026-10): keeps the homepage news feed (`daily_feed`)
+  current — twice a week (cron included) it posts one item built only from real data
+  through a fixed template: the top 1–2 official broadcasts of the week from
+  lichess.org's public API (one request per run, identified User-Agent, no personal
+  names), the site's own game/tournament/new-player counts, and the next scheduled
+  tournament. It skips runs with nothing new, never deletes posts (older ones are set
+  non-public), and backs up the collection before every write.
 - **contact-api/** (2026-10): the small Node.js contact-form backend
   (`server.js`, sends via authenticated SMTP; credentials come from an
   environment file that is not published; recipient address sanitized).

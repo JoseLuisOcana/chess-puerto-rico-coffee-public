@@ -1,0 +1,14 @@
+# /etc/cron.d/chess-auto-feed
+#
+# 2026-10-03: posts ONE real-data item to the homepage feed (daily_feed) every Monday and
+# Thursday at 08:00 AST — the server TZ is America/Puerto_Rico (no DST), so 08:00 here IS
+# 08:00 AST — and keeps only the newest 5 posts public (older ones public:false, never
+# deleted). Skips the run when there is nothing new to say. See /usr/local/bin/chess-auto-feed.sh.
+#
+# Silent on success and on a normal skip (log: /var/log/chess-auto-feed.log); cron mails on error.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=admin@example.com   # sanitized: set your admin address
+
+0 8 * * 1,4 root /usr/local/bin/chess-auto-feed.sh
