@@ -9,11 +9,15 @@
 #    videos already in the library (channel ids read from each video's own watch page).
 #    Source: each channel's public RSS feed of its "UULF" playlist (long-form uploads: YouTube
 #    keeps Shorts and live streams out of it), no API key. Then, per candidate, its watch page
-#    must say: same channel, playability OK, embeddable, not live content, not upcoming,
-#    >= 61 s; and youtube.com/shorts/<id> must redirect (303) — a Short answers 200.
+#    must say: same channel, playability OK, embeddable, family-safe (not age-restricted), not
+#    live content, not upcoming, >= 61 s; youtube.com/shorts/<id> must redirect (303) — a Short
+#    answers 200; and oEmbed must answer 200 (401 = embedding disabled, 404 = private/removed).
+#    KIDS USE THE SITE: titles matching /etc/chess-video-blocklist.json (profanity, sexual, violent
+#    words, "mate"/"mating" puns — real chess terms like "mate in 2" are allowed first) are skipped
+#    before any request. A missing or malformed blocklist stops the run.
 #    "New" = published since the last successful run (1 day overlap; window 7-21 days), not
-#    already in the library. At most 5 per channel per calendar week (Sunday 00:00 AST on, counted
-#    from the library's createdAt, so a re-run in the same week adds nothing beyond the 5), newest first.
+#    already in the library. At most 2 per channel per calendar week (Sunday 00:00 AST on, counted
+#    from the library's createdAt, so a re-run in the same week adds nothing beyond the 2), newest first.
 #    Doc fields follow lila's Video case class: title = YouTube title, author = channel name,
 #    targets = union of that channel's existing videos' targets, tags = existing library tags
 #    that occur as whole words in the title, lang/ads/startTime as the rest of the library,
@@ -21,9 +25,9 @@
 # 2. Writes httpdocs/prcoffee/videos.json for /prcoffee/videos.js (homepage only): the 4 newest
 #    videos by their REAL publish date, at most 1 per channel (relaxed only if needed to fill 4);
 #    random fill if fewer than 4 have dates. Titles/channels/dates come from the verified cache
-#    /var/lib/chess-video-refresh/verified.json, not from the library docs: on 2026-10-03 the
-#    stored metadata.publishedAt was wrong for 49 of the 50 imported videos and 11 `author`
-#    fields name a presenter or another channel. Unknown ids are verified via oEmbed + watch page.
+#    /var/lib/chess-video-refresh/verified.json (oEmbed + watch page per id; the 50 imported docs
+#    were corrected from it on 2026-10-03 — their dates had been wrong for 49 of 50). Every strip
+#    candidate must pass the title blocklist and a FRESH oEmbed + family-safe/embeddable check.
 # 3. Downloads the strip's thumbnails (i.ytimg.com mqdefault, 320x180 JPEG, validated) into
 #    httpdocs/prcoffee/video-thumbs/ — the homepage makes no third-party image requests. Keeps
 #    only the current and previous strip's files (browsers may hold the old JSON for a while).
@@ -62,6 +66,7 @@ import xml.etree.ElementTree as ET
 LOG = "/var/log/chess-video-refresh.log"
 PROJECT = "/opt/chess/lila-docker"
 CHANNELS_FILE = "/etc/chess-video-channels.json"
+BLOCKLIST_FILE = "/etc/chess-video-blocklist.json"
 STATE_DIR = "/var/lib/chess-video-refresh"
 VERIFIED = f"{STATE_DIR}/verified.json"
 STATE = f"{STATE_DIR}/state.json"
@@ -74,7 +79,7 @@ SITE_HOST = "chesspuertoricocoffee.com"
 PROBE_IP = "82.165.212.204"  # connect by IP, SNI on the real name, like the other health checks
 STRIP_SIZE = 4
 STRIP_PER_CHANNEL = 1
-MAX_NEW_PER_CHANNEL = 5
+MAX_NEW_PER_CHANNEL = 2
 MIN_SECONDS = 61
 USER_AGENT = ("chesspuertoricocoffee.com-video-refresh/1.0 "
               "(+https://chesspuertoricocoffee.com; system@chesspuertoricocoffee.com)")
@@ -152,6 +157,7 @@ def watch_info(vid):
         "publishDate": g(r'itemprop="datePublished" content="([^"]+)"') or g(r'"publishDate":"([^"]+)"'),
         "status": g(r'"playabilityStatus":\{"status":"([A-Z_]+)"'),
         "embeddable": g(r'"playableInEmbed":(true|false)'),
+        "familySafe": g(r'"isFamilySafe":(true|false)'),  # false = age-restricted
         "live": g(r'"isLiveContent":(true|false)'),
         "upcoming": g(r'"isUpcoming":(true|false)'),
         "length": int(g(r'"lengthSeconds":"(\d+)"') or 0),
@@ -160,9 +166,25 @@ def watch_info(vid):
 
 
 def oembed(vid):
+    """(status, data): 200 = embeddable and public; 401 = embedding disabled; 404 = private/removed."""
     u = "https://www.youtube.com/oembed?format=json&url=" + urllib.parse.quote(f"https://www.youtube.com/watch?v={vid}")
     st, body = get(u)
-    return json.loads(body) if st == 200 else None
+    try:
+        return st, (json.loads(body) if st == 200 else None)
+    except ValueError:
+        return 0, None
+
+
+def unsafe_now(vid, w=None):
+    """None if YouTube says right now that the video may be shown here, else the reason.
+    oEmbed covers embedding; age restriction only shows on the watch page (isFamilySafe)."""
+    st, _ = oembed(vid)
+    if st != 200:
+        return f"oEmbed {st}"
+    w = w or watch_info(vid)
+    return (f"playability {w['status']}" if w["status"] != "OK" else
+            "age-restricted" if w["familySafe"] != "true" else
+            "not embeddable" if w["embeddable"] != "true" else None)
 
 
 # ---------------------------------------------------------------- Mongo
@@ -204,6 +226,26 @@ channels = load_json(CHANNELS_FILE, None)
 if not channels or not isinstance(channels.get("channels"), list):
     die(f"allowlist {CHANNELS_FILE} missing or malformed")
 allow = {c["channelId"]: c for c in channels["channels"] if re.fullmatch(r"UC[\w-]{22}", c.get("channelId", ""))}
+_bl = load_json(BLOCKLIST_FILE, None)
+try:  # fail closed: no blocklist, no run (kids use the site)
+    ALLOW_PHRASES = [re.compile(r"(?<!\w)" + p + r"(?!\w)", re.I) for p in _bl["allowChessPhrases"]]
+    BLOCK = [(cat, w, re.compile(r"(?<!\w)" + w + r"(?!\w)", re.I)) for cat, ws in _bl["block"].items() for w in ws]
+    assert BLOCK
+except Exception as e:
+    die(f"blocklist {BLOCKLIST_FILE} missing or malformed ({type(e).__name__}) — refusing to run")
+
+
+def blocked(title):
+    """'category:word' if the title must not be shown, else None. Chess phrases are removed first."""
+    t = title or ""
+    for a in ALLOW_PHRASES:
+        t = a.sub(" ", t)
+    for cat, w, rx in BLOCK:
+        if rx.search(t):
+            return f"{cat}:{w}"
+    return "profanity:censored" if re.search(r"[A-Za-z]\*+[A-Za-z]", t) else None
+
+
 verified = load_json(VERIFIED, {})
 state = load_json(STATE, {})
 
@@ -217,13 +259,14 @@ log(f"library {len(lib)} videos; allowlist {len(allow)} channels; verified cache
 for v in lib:
     if v["_id"] in verified:
         continue
-    o, w = oembed(v["_id"]), watch_info(v["_id"])
+    (ost, o), w = oembed(v["_id"]), watch_info(v["_id"])
     if o and w["publishDate"]:
         verified[v["_id"]] = {"title": o["title"], "channel": o["author_name"], "channelId": w["channelId"],
-                              "publishedAt": iso(parse_time(w["publishDate"])), "checkedAt": iso(now)}
+                              "publishedAt": iso(parse_time(w["publishDate"])), "embedOk": True,
+                              "familySafe": w["familySafe"] == "true", "checkedAt": iso(now)}
         log(f"verified {v['_id']} {o['author_name']!r} {w['publishDate'][:10]}")
     else:
-        log(f"WARN cannot verify library video {v['_id']} (oEmbed {'ok' if o else 'failed'}, watch http {w['http']})")
+        log(f"WARN cannot verify library video {v['_id']} (oEmbed {ost}, watch http {w['http']})")
 
 # channel id of every library video -> targets / lang per channel
 chan_targets, chan_lang = {}, {}
@@ -249,6 +292,7 @@ for v in lib:
 log(f"week since {iso(week_start)}: already added {sum(added_this_week.values())} ({ {allow[c]['name']: n for c, n in added_this_week.items() if c in allow} })")
 
 new_docs = []
+fresh_ok = set()  # passed every YouTube check in this run already
 for cid, ch in allow.items():
     st, body = get(f"https://www.youtube.com/feeds/videos.xml?playlist_id=UULF{cid[2:]}")
     try:
@@ -274,10 +318,15 @@ for cid, ch in allow.items():
     for pub, vid, title, e in cands:
         if len(accepted) >= MAX_NEW_PER_CHANNEL - added_this_week.get(cid, 0):
             break
+        bad = blocked(title)
+        if bad:  # decided on the title alone, before any request
+            skipped.append(f"{vid} (blocked title {bad})")
+            continue
         w = watch_info(vid)
         why = ("watch page unreadable" if not w["channelId"] else
                "other channel" if w["channelId"] != cid else
                f"playability {w['status']}" if w["status"] != "OK" else
+               "age-restricted" if w["familySafe"] != "true" else
                "not embeddable" if w["embeddable"] != "true" else
                "live stream" if w["live"] == "true" else
                "upcoming" if w["upcoming"] == "true" else
@@ -285,6 +334,9 @@ for cid, ch in allow.items():
         if not why:
             sst, _ = get(f"https://www.youtube.com/shorts/{vid}", follow=False)
             why = "is a Short" if sst == 200 else None if sst in (301, 302, 303) else f"shorts check http {sst}"
+        if not why:
+            ost, _ = oembed(vid)
+            why = None if ost == 200 else f"oEmbed {ost}"
         if why:
             skipped.append(f"{vid} ({why})")
             continue
@@ -302,8 +354,9 @@ for cid, ch in allow.items():
                             "publishedAt": iso(pub), "refreshedAt": iso(now)},
                "createdAt": iso(now)}
         accepted.append(doc)
-        verified[vid] = {"title": title, "channel": ch["name"], "channelId": cid,
-                         "publishedAt": iso(pub), "checkedAt": iso(now)}
+        verified[vid] = {"title": title, "channel": ch["name"], "channelId": cid, "publishedAt": iso(pub),
+                         "embedOk": True, "familySafe": True, "checkedAt": iso(now)}
+        fresh_ok.add(vid)
     new_docs += accepted
     budget = max(0, MAX_NEW_PER_CHANNEL - added_this_week.get(cid, 0))
     log(f"{ch['name']}: {len(entries)} in feed, {len(cands)} new in window, week budget {budget} -> {len(accepted)} accepted"
@@ -355,6 +408,20 @@ def have_thumb(vid):
     return False
 
 
+rejected = {}  # vid -> reason; a strip candidate is checked at most once per run
+
+
+def showable(vid):
+    """Kids-safe gate for the homepage: blocklist on the verified title, then YouTube asked NOW."""
+    if vid not in rejected:
+        why = blocked(verified[vid].get("title"))
+        why = f"blocked title {why}" if why else (None if vid in fresh_ok else unsafe_now(vid))
+        if why:
+            log(f"strip skips {vid} ({why}) {verified[vid].get('title')!r}")
+        rejected[vid] = why
+    return rejected[vid] is None
+
+
 strip, per_channel = [], {}
 for relax in (False, True):  # 2nd pass only if 1-per-channel cannot fill the strip
     for vid in order:
@@ -363,7 +430,7 @@ for relax in (False, True):  # 2nd pass only if 1-per-channel cannot fill the st
         cid = verified[vid].get("channelId")
         if vid in strip or (not relax and per_channel.get(cid, 0) >= STRIP_PER_CHANNEL):
             continue
-        if have_thumb(vid):
+        if showable(vid) and have_thumb(vid):
             strip.append(vid)
             per_channel[cid] = per_channel.get(cid, 0) + 1
 

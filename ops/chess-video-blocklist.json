@@ -1,0 +1,16 @@
+{
+ "_comment": "Title blocklist for /usr/local/bin/chess-video-refresh.sh (owner decision 2026-10-03: kids use the site). Every entry is a case-insensitive regex matched as a WHOLE word or phrase. 'allowChessPhrases' are removed from the title FIRST, so real chess terms survive ('mating patterns', 'mate in 2', 'smothered mate'; 'checkmate' and 'stalemate' never match the whole word 'mate'). Then any 'block' entry left in the title skips the video - for new videos AND for the homepage strip. A word with '*' between letters (censored swearing) is blocked too. Deliberately NOT blocked: standard chess hyperbole and vocabulary - destroy(s), crush(es), demolish, annihilate, brutal, savage, attack, sacrifice, war, battle, fight, punish - which would remove a large share of ordinary chess titles. Edit by hand; re-mirror to the AGPL repo.",
+ "allowChessPhrases": [
+  "mate[- ]in[- ](?:\\d+|one|two|three|four|five|six|seven|eight|nine|ten)",
+  "(?:forced|quick|quickest|fastest|smothered|back[- ]rank|scholar'?s|fool'?s|anastasia'?s|boden'?s|arabian|epaulette|legal'?s|opera|hook|corridor|damiano'?s|blackburne'?s|greco'?s|lolli'?s|morphy'?s|pillsbury'?s|dovetail|swallow'?s[- ]tail|reti'?s|réti'?s|cozio'?s|kill[- ]box|ladder|lawnmower|two[- ]rooks?|rook|queen|bishop[- ]and[- ]knight|two[- ]bishops?|king[- ]and[- ]queen|king[- ]and[- ]rook|helpmate|selfmate)[- ]mates?",
+  "mating[- ](?:net|nets|attack|attacks|pattern|patterns|idea|ideas|combination|combinations|motif|motifs|square|squares|threat|threats|material|race|sequence|sequences)",
+  "mate[- ](?:threat|threats)",
+  "(?:how[- ]to|learn[- ]to|ways[- ]to)[- ]mate[- ]with"
+ ],
+ "block": {
+  "matePun": ["mate", "mates", "mated", "mating", "matey"],
+  "profanity": ["fuck", "fucks", "fucked", "fucker", "fuckers", "fucking", "motherfucker", "shit", "shits", "shitty", "bullshit", "bitch", "bitches", "ass", "asses", "asshole", "assholes", "bastard", "bastards", "damn", "dammit", "goddamn", "hell", "crap", "crappy", "piss", "pissed", "dick", "dicks", "cock", "pussy", "wtf", "stfu", "omfg", "slut", "whore", "retard", "retarded"],
+  "sexual": ["sex", "sexy", "sexual", "sexually", "porn", "porno", "pornhub", "nude", "nudes", "naked", "nsfw", "onlyfans", "xxx", "horny", "erotic", "boob", "boobs", "tits", "titty", "thicc", "hentai", "fetish", "orgasm", "stripper", "strip[- ]club", "lingerie", "bikini", "making[- ]out", "make[- ]out", "hookup", "hook[- ]up", "seduce", "seduces", "seductive", "one[- ]night[- ]stand", "friends[- ]with[- ]benefits"],
+  "violent": ["kill", "kills", "killed", "killer", "killers", "killing", "murder", "murders", "murdered", "murderer", "murdering", "massacre", "massacred", "slaughter", "slaughtered", "bloodbath", "bloody", "blood", "gun", "guns", "gunshot", "shoot", "shoots", "shooting", "shooter", "stab", "stabs", "stabbed", "stabbing", "rape", "raped", "suicide", "terrorist", "terrorists", "terrorism", "bomb", "bombs", "bombing", "behead", "beheaded", "torture", "tortured", "assassin", "assassinate", "assassinated", "genocide", "hostage"]
+ }
+}

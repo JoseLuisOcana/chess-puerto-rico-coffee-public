@@ -28,7 +28,9 @@ source-disclosure requirements.
   `/video/<id>` pages; styles in `branding.css`. Its data file and thumbnails are written weekly by
   `ops/chess-video-refresh.sh`, which adds new long-form videos only from the YouTube channels in
   `ops/chess-video-channels.json` (public RSS feeds, no API key; Shorts and live streams skipped;
-  max 5 per channel per week) and serves thumbnails locally. Thumbnails and `videos.json` are
+  max 2 per channel per week; titles must pass `ops/chess-video-blocklist.json` - profanity, sexual or
+  violent words, "mate" puns, with real chess terms allowed - and YouTube must report the video as
+  embeddable and not age-restricted) and serves thumbnails locally. Thumbnails and `videos.json` are
   generated data (the thumbnails belong to the video creators) and are not part of this repository.
 - (2026-10) **Logo:** the Lichess knight is replaced everywhere it appeared —
   favicons, Safari mask icon (removed), Open Graph image, web-app manifest
