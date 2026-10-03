@@ -28,7 +28,7 @@ by AGPL-3.0.
 | `lila-modifications/` | Direct modifications to upstream lila Scala source code, mirroring the upstream directory structure |
 | `caddy/` | Modified Caddyfile with case-insensitive WebSocket matcher |
 | `docker/` | docker-compose overrides, sanitized .env example, sanitized lila.conf.example |
-| `nginx/` | Live nginx vhost, branding + dotfile-deny snippets, http-context `conf.d/` maps (incl. crawler rate limiting), Plesk pre-staging copy |
+| `nginx/` | Live nginx vhost (HTTP/2 on the TLS listener), branding + dotfile-deny snippets, http-context `conf.d/` files (maps, crawler rate limiting, TLS session cache), Plesk pre-staging copy |
 | `public/static/` | Custom static pages (about, privacy, terms, contact) |
 | `public/` | Custom robots.txt and sitemap.xml |
 | `ops/` | Deployment scripts, cron entries and systemd units (sanitized) |

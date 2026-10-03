@@ -20,6 +20,9 @@ source-disclosure requirements.
   labels rebranded, links to routes that do not exist on this deployment
   removed, the FAQ "contribute" answer pointed at the upstream Lichess
   project, and `Permissions-Policy` re-emitted without upstream hosts.
+- (2026-10) **HTTP/2** enabled on the TLS listener (`http2` on the vhost's `listen … ssl` lines,
+  nginx 1.18 syntax) and a server-side TLS session cache (`nginx/conf.d/ssl-session-cache.conf`).
+  WebSocket connections still use the HTTP/1.1 upgrade path.
 - (2026-10) Sponsor bar and AGPL footer styling moved from inline styles
   into `public/static/prcoffee/branding.css` (served at `/prcoffee/branding.css`).
 - (2026-10) **Homepage "Chess Videos" strip:** `public/static/prcoffee/videos.js` (loaded on the
