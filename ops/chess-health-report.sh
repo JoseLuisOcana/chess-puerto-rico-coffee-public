@@ -54,8 +54,8 @@
 #   --dry-run     print the report, send nothing
 #   --test        send, with "[test]" at the end of the subject
 #   --label TEXT  an extra (non-weekly) run: subject says "health report (TEXT)" instead of "weekly health report"
-# (Public copy: the other sites hosted on this server and the backup repo path are not listed; otherwise identical
-# to the deployed script.)
+# (Public copy: the other sites hosted on this server, their checks and the backup repo path are not listed;
+# otherwise identical to the deployed script.)
 
 set -euo pipefail
 if [[ $EUID -ne 0 ]]; then echo "chess-health-report: run as root" >&2; exit 1; fi
@@ -466,6 +466,8 @@ out.append(f"{flag}drift checker: {len(fails)} FAIL, {sum(' no-op' in l for l in
            + f"; next {next_drift_check():%a %b %d %H:%M} AST")
 out += [f"    {l[:120]}" for l in fails[-2:]]
 sections.append(out)
+
+# ---------------------------------------------------------------- 11. (public copy: a check of another site on this server is omitted)
 
 # ---------------------------------------------------------------- compose + send
 ok = not issues
