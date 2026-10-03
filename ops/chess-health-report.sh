@@ -19,8 +19,12 @@
 #     elasticvue (Elasticsearch web UI) and mailpit (dev mail catcher; real mail goes through IONOS) are dev tools in the
 #     active `search`/`email` profiles that have been stopped on purpose since 2026-09-13; they are listed, not flagged.
 #   - last 7 days of lila error.log (ERROR lines) and nginx error.log (emerg/alert/crit). Two KNOWN-BENIGN nginx patterns
-#     are counted separately and do not warn: "open() …/logs/proxy_* failed (13: Permission denied)" (a non-root nginx
-#     config test every midnight, ~252 lines/day since at least 2026-09-28), client-side TLS aborts ("SSL_do_handshake()",
+#     are counted separately and do not warn: "open() …/logs/proxy_* failed (13: Permission denied)" = nightly logrotate:
+#     nginx workers can't reopen Plesk per-site logs (harmless). /etc/logrotate.d/nginx sends nginx USR1 at ~00:00:10;
+#     the root master reopens every log, then each of the 12 www-data workers fails on the 21 per-site logs because
+#     Plesk keeps each /var/www/vhosts/system/<site>/logs dir psaadm:root 700 (12 x 21 = 252 lines/day). The workers
+#     keep their open handles and Plesk only empties those files in place, so no log lines are lost),
+#     client-side TLS aborts ("SSL_do_handshake()",
 #     "SSL_read()" or "SSL_write() failed"), and emerg lines about a config file outside /etc/nginx (someone running
 #     `nginx -t` on a scratch copy). Anything else at emerg/alert/crit warns.
 #   - RAM and swap: warn when available RAM < 10 % or swap > 50 % used
@@ -229,7 +233,8 @@ flag = warn(f"{unexpected} unexpected nginx emerg/alert/crit lines") if unexpect
 out.append(f"{flag}nginx error.log: {unexpected} unexpected emerg/alert/crit, {counts['error']} [error]")
 for msg in other[-3:]:
     out.append(f"    {msg}")
-out.append(f"    known benign (not counted): {benign_perm} midnight non-root config-test lines, {benign_tls} client TLS aborts, "
+out.append(f"    known benign (not counted): {benign_perm} lines from the nightly logrotate: nginx workers can't reopen Plesk per-site "
+           f"logs (harmless); {benign_tls} client TLS aborts; "
            f"{benign_test} config tests of files outside /etc/nginx")
 sections.append(out)
 
