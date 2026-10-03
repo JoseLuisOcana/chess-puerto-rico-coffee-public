@@ -3,7 +3,10 @@
  * Data: /prcoffee/videos.json, written weekly by /usr/local/bin/chess-video-refresh.sh — the 4 newest
  * videos of lila's own library, thumbnails served from /prcoffee/video-thumbs/ (no third-party
  * requests). Cards link to our own /video/<id> pages. Styles: "Chess Videos strip" in branding.css.
- * DOM is built with textContent only; any failure leaves the page exactly as lila rendered it. */
+ * Bottom order (2026-10-03): strip, then lila's link row (.lobby__about: Contact · About · Terms · Privacy ·
+ * shop link), moved here from the end of main.lobby, then the sponsor bar + AGPL footer (untouched).
+ * DOM is built with textContent only; any failure leaves the page exactly as lila rendered it — the
+ * link row is only moved once the strip is actually on the page. */
 (function () {
   'use strict';
   if (location.pathname !== '/') return;
@@ -64,6 +67,8 @@
     vids.forEach(function (v) { grid.appendChild(card(v)); });
     section.appendChild(grid);
     main.insertAdjacentElement('afterend', section);
+    var about = main.querySelector(':scope > .lobby__about');
+    if (about) section.insertAdjacentElement('afterend', about);
   }
 
   function start() {

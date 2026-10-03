@@ -48,4 +48,8 @@ body{padding-bottom:60px!important;}header#top{background:linear-gradient(135deg
 .prc-vcard__body{display:flex;flex-direction:column;gap:.3em;padding:.55em .65em .7em}
 .prc-vcard__title{font-size:.9em;font-weight:600;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
 .prc-vcard__channel{color:#D4A76A;font-size:.8em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 2026-10-03: videos.js moves lila's link row (.lobby__about) out of main.lobby to just below the strip.
+   Its own lila rule `grid-area: about` names an area that only exists inside the lobby grid, so on
+   #main-wrap it must be put back on the main column explicitly. */
+#main-wrap>.lobby__about{grid-area:auto;grid-column:main;margin:0 0 1.5em}
 @media(min-width:800px){.prc-videos__grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.prc-vcard__date{left:8px;bottom:8px;font-size:.75em}.prc-vcard__body{padding:.7em .8em .8em}.prc-vcard__title{font-size:1em}.prc-vcard__channel{font-size:.85em}}
