@@ -11,7 +11,11 @@
 # Subject starts with ✅ when every check passes, ⚠️ when any check needs attention. Checks and thresholds:
 #   - last nightly mongodump: log line OK + verified=yes, archive present with the logged size, younger than 26 h
 #   - disk free on /: warn under 15 % or under 30 GB
-#   - TLS certificate of every hostname on the server (connect by IP with SNI, full chain + hostname check): warn under 21 days
+#   - TLS certificate of every hostname on the server (connect by IP with SNI, full chain + hostname check): warn under 21 days.
+#     Also reads Plesk's copy (the file Apache's SSLCertificateFile points at): warn when Plesk has NOT renewed it by
+#     29.5 days left (Plesk renews 30 days ahead, at :39 past the hour), and when nginx still serves an older serial
+#     than Plesk's more than 3.5 days after Plesk renewed (the drift checker runs every 3 days, 13:00 AST, days 1,4,7…;
+#     inside that grace it is listed, not flagged). Lists every certificate Plesk renewed in the last 7 days.
 #   - last REAL run of each cron (dry-runs are ignored): result, and age against its schedule
 #       puzzle recycle 04:15 daily (26 h), mongodump 03:30 daily (26 h), auto-feed Mon+Thu 08:00 (4.5 days),
 #       video refresh Sun 07:00 (8 days), bgjobs cleanup Sun 04:45 (8 days)
@@ -28,19 +32,38 @@
 #     "SSL_read()" or "SSL_write() failed"), and emerg lines about a config file outside /etc/nginx (someone running
 #     `nginx -t` on a scratch copy). Anything else at emerg/alert/crit warns.
 #   - RAM and swap: warn when available RAM < 10 % or swap > 50 % used
+#   (added 2026-10-03, second batch — owner request)
+#   - nginx: warn when nothing listens on :443 or :80 (the 2026-09-17 "inherited sockets" trap: nginx active and
+#     `nginx -t` clean, yet a port silently missing), when `nginx -T` fails, and when any file nginx LOADS (per
+#     `nginx -T`, symlinks followed, per-site vhost_nginx.conf included) is not byte-identical to a file in the
+#     PUSHED state (origin/main) of the private server-config-backup repo. Package module stubs
+#     (/usr/share/nginx/modules-available) are exempt — reinstallable.
+#   - packages: warn on security updates not installed (apt-get -s dist-upgrade, no lock, no `apt update` — the
+#     lists come from apt-daily; warn if those are > 2 days old), on unattended-upgrades "has conffile prompt" lines
+#     (= an update SKIPPED because we edited one of its config files, e.g. nginx.conf) or ERROR lines in the last
+#     7 days, when sw-nginx (Plesk's nginx) leaves dpkg state "rc" (installed = the 2026-09-17 disaster; gone from
+#     dpkg = it was PURGED, which can delete live /etc/nginx files), when the apt pin
+#     /etc/apt/preferences.d/no-sw-nginx is missing or sw-nginx has an install candidate, and when /usr/sbin/nginx
+#     is not Ubuntu's nginx-core. From 2027-01-01, on Ubuntu 22.04 without Ubuntu Pro attached: "Ubuntu 22.04
+#     support ends April 2027: plan Ubuntu Pro or 24.04".
+#   - Let's Encrypt: ERR/WARN lines from Plesk's letsencrypt/sslit extensions in /var/log/plesk/panel.log (Plesk logs
+#     nothing on a successful renewal), and FAIL lines of the cert drift checker (/var/log/le-cert-renewal-check.log),
+#     last 7 days.
 #
-# Usage: chess-health-report.sh [--dry-run] [--test]
-#   --dry-run   print the report, send nothing
-#   --test      send, with "[test]" at the end of the subject
+# Usage: chess-health-report.sh [--dry-run] [--test] [--label TEXT]
+#   --dry-run     print the report, send nothing
+#   --test        send, with "[test]" at the end of the subject
+#   --label TEXT  an extra (non-weekly) run: subject says "health report (TEXT)" instead of "weekly health report"
+# (Public copy: the other sites hosted on this server and the backup repo path are not listed; otherwise identical
+# to the deployed script.)
 
-# (Public copy: the other sites hosted on this server are not listed; otherwise identical to the deployed script.)
 set -euo pipefail
 if [[ $EUID -ne 0 ]]; then echo "chess-health-report: run as root" >&2; exit 1; fi
 exec 9>/run/lock/chess-health-report.lock
 flock -n 9 || { echo "$(date -u +%FT%TZ) SKIP another run holds the lock" >> /var/log/chess-health-report.log; exit 0; }
 
 exec python3 - "$@" <<'PY'
-import argparse, datetime as dt, glob, gzip, json, os, re, shutil, smtplib, socket, ssl, subprocess, sys
+import argparse, datetime as dt, glob, gzip, hashlib, json, os, re, shutil, smtplib, socket, ssl, subprocess, sys
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 
@@ -51,12 +74,17 @@ TO = "system@chesspuertoricocoffee.com"
 PROBE_IP = "82.165.212.204"   # connect by IP + SNI (one hostname resolves to a loopback address locally)
 HOSTS = ["chesspuertoricocoffee.com", "www.chesspuertoricocoffee.com"]  # public copy: the other sites on this server are not listed
 CERT_WARN_DAYS = 21
+PLESK_RENEW_WARN_DAYS = 29.5   # Plesk renews 30 days ahead, normally within the hour (its task runs at :39)
+DRIFT_GRACE_DAYS = 3.5         # check-le-cert-renewal-all.sh: cron "0 13 */3 * *" = 13:00 AST on days 1,4,7,…,31
+BACKUP_REPO = "/home/ADMIN/projects/server-config-backup"   # public copy: path of the private config-backup repo
+SW_NGINX_PIN = "/etc/apt/preferences.d/no-sw-nginx"
 EXPECTED_STOPPED = {"elasticvue": "Elasticsearch web UI, dev tool", "mailpit": "dev mail catcher; real mail goes via IONOS"}
 AST = dt.timezone(dt.timedelta(hours=-4))   # America/Puerto_Rico, no DST
 UTC = dt.timezone.utc
 
 ap = argparse.ArgumentParser(prog="chess-health-report.sh")
 ap.add_argument("--dry-run", action="store_true"); ap.add_argument("--test", action="store_true")
+ap.add_argument("--label", default="")
 args = ap.parse_args()
 now = dt.datetime.now(UTC)
 issues, sections = [], []
@@ -111,18 +139,59 @@ flag = warn(f"disk free {pct:.0f} %") if pct < 15 or du.free < 30e9 else ""
 sections.append(["DISK", f"{flag}/ : {du.free/1e9:.0f} GB free of {du.total/1e9:.0f} GB ({pct:.0f} % free)"])
 
 # ---------------------------------------------------------------- 3. TLS certificates
-out = [f"TLS CERTIFICATES (warn under {CERT_WARN_DAYS} days)"]
+def plesk_cert(host):
+    """Serial, notBefore, notAfter of the certificate Plesk/Apache uses for host (read-only)."""
+    d = host if os.path.isdir(f"/var/www/vhosts/system/{host}") else host.removeprefix("www.")
+    m = re.search(r'^\s*SSLCertificateFile\s+"?([^"\s]+)', open(f"/var/www/vhosts/system/{d}/conf/httpd.conf").read(), re.M)
+    o = subprocess.run(["openssl", "x509", "-noout", "-serial", "-startdate", "-enddate", "-in", m.group(1)],
+                       capture_output=True, text=True, check=True).stdout
+    f = dict(l.split("=", 1) for l in o.splitlines() if "=" in l)
+    p = lambda s: dt.datetime.strptime(s.strip(), "%b %d %H:%M:%S %Y %Z").replace(tzinfo=UTC)
+    return f["serial"].strip().upper().lstrip("0"), p(f["notBefore"]), p(f["notAfter"])
+
+
+def next_drift_check():
+    t = now.astimezone(AST).replace(hour=13, minute=0, second=0, microsecond=0)
+    return next(c for c in (t + dt.timedelta(days=i) for i in range(40)) if (c.day - 1) % 3 == 0 and c > now)
+
+
+out = [f"TLS CERTIFICATES (served: warn under {CERT_WARN_DAYS} days; Plesk's copy: warn if not renewed by "
+       f"{PLESK_RENEW_WARN_DAYS:g} days left)"]
 ctx = ssl.create_default_context()
+renewed = []
 for h in HOSTS:
     try:
         with socket.create_connection((PROBE_IP, 443), timeout=10) as sock:
             with ctx.wrap_socket(sock, server_hostname=h) as tls:
-                end = dt.datetime.fromtimestamp(ssl.cert_time_to_seconds(tls.getpeercert()["notAfter"]), UTC)
+                pc = tls.getpeercert()
+        end = dt.datetime.fromtimestamp(ssl.cert_time_to_seconds(pc["notAfter"]), UTC)
         days = (end - now).days
         flag = warn(f"{h} certificate expires in {days} days") if days < CERT_WARN_DAYS else ""
-        out.append(f"{flag}{h:44} {days:3d} days (until {end:%b %d %Y})")
+        line = f"{h:44} {days:3d} days (until {end:%b %d %Y})"
     except Exception as e:
         out.append(warn(f"{h} TLS check failed") + f"{h:44} FAILED: {type(e).__name__}: {str(e)[:80]}")
+        continue
+    try:
+        serial, nb, na = plesk_cert(h)
+        left = (na - now).total_seconds() / 86400
+        if now - nb < dt.timedelta(days=7):
+            renewed.append(f"{h} on {nb.astimezone(AST):%a %b %d %H:%M} AST (until {na:%b %d %Y})")
+        if left < PLESK_RENEW_WARN_DAYS:
+            flag = warn(f"{h}: Plesk has NOT renewed its certificate ({left:.1f} days left; Plesk renews at 30)")
+        if serial == pc.get("serialNumber", "").upper().lstrip("0"):
+            line += "  same as Plesk's"
+        elif now - nb > dt.timedelta(days=DRIFT_GRACE_DAYS):
+            flag = warn(f"{h}: nginx still serves an OLD certificate; Plesk's renewed one (until {na:%b %d %Y}) "
+                        f"is unused — the drift checker did not switch it")
+            line += f"  DRIFT: Plesk's renewed one runs until {na:%b %d %Y}"
+        else:
+            line += (f"  Plesk renewed it (until {na:%b %d %Y}); nginx switches at the drift check "
+                     f"{next_drift_check():%a %b %d %H:%M} AST")
+    except Exception as e:
+        flag = warn(f"{h}: could not read Plesk's certificate")
+        line += f"  (Plesk's copy unreadable: {type(e).__name__})"
+    out.append(flag + line)
+out.append("Renewed by Plesk in the last 7 days: " + ("; ".join(renewed) if renewed else "none"))
 sections.append(out)
 
 # ---------------------------------------------------------------- 4. crons (last REAL run)
@@ -251,11 +320,159 @@ load = open("/proc/loadavg").read().split()[:3]
 out.append(f"load average {' '.join(load)} on {os.cpu_count()} CPUs, up {float(open('/proc/uptime').read().split()[0])/86400:.1f} days")
 sections.append(out)
 
+# ---------------------------------------------------------------- 8. nginx: listeners + loaded files vs backup repo
+out = ["NGINX (listeners; every loaded config file vs server-config-backup, pushed state)"]
+ports = {}
+for l in subprocess.run(["ss", "-ltnpH"], capture_output=True, text=True).stdout.splitlines():
+    f = l.split()
+    if len(f) >= 4 and '"nginx"' in l:
+        ports.setdefault(f[3].rsplit(":", 1)[1], set()).add(f[3])
+for p in ("443", "80"):
+    if p in ports:
+        out.append(f"nginx listening on :{p} ({', '.join(sorted(ports[p]))})")
+    else:
+        out.append(warn(f"nginx is NOT listening on :{p}") + f"nginx NOT listening on :{p} — if nginx is active and "
+                   f"`nginx -t` passes, it is the inherited-sockets trap: systemctl stop nginx, then start")
+t = subprocess.run(["nginx", "-T"], capture_output=True, text=True)
+if t.returncode != 0:
+    out.append(warn("nginx -T fails: the nginx configuration is INVALID") + "nginx -T: " +
+               (t.stderr.strip().splitlines() or ["?"])[-1][:120])
+else:
+    try:
+        git = ["git", "-c", f"safe.directory={BACKUP_REPO}", "-C", BACKUP_REPO]
+        ref = "origin/main" if subprocess.run(git + ["rev-parse", "-q", "--verify", "origin/main"],
+                                              capture_output=True).returncode == 0 else "HEAD"
+        head = subprocess.run(git + ["rev-parse", "--short", ref], capture_output=True, text=True, check=True).stdout.strip()
+        blobs = {l.split()[2] for l in subprocess.run(git + ["ls-tree", "-r", ref], capture_output=True, text=True,
+                                                      check=True).stdout.splitlines()}
+        loaded = list(dict.fromkeys(re.findall(r"^# configuration file (.+):$", t.stdout, re.M)))
+        missing, exempt = [], 0
+        for p in loaded:
+            real = os.path.realpath(p)
+            if real.startswith("/usr/share/nginx/modules-available/"):
+                exempt += 1; continue
+            data = open(real, "rb").read()
+            if hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest() not in blobs:
+                missing.append(p)
+        if missing:
+            out.append(warn(f"{len(missing)} loaded nginx file(s) not in server-config-backup (or changed since the "
+                            f"last push)") + f"{len(missing)} of {len(loaded) - exempt} loaded files NOT in the backup "
+                       f"repo ({ref} {head}):")
+            out += [f"    {p}" for p in missing[:10]]
+        else:
+            out.append(f"all {len(loaded) - exempt} loaded config files are byte-identical in server-config-backup "
+                       f"({ref} {head}); {exempt} package module stubs exempt")
+    except Exception as e:
+        out.append(warn("could not compare nginx files with server-config-backup") +
+                   f"backup comparison failed: {type(e).__name__}: {str(e)[:100]}")
+sections.append(out)
+
+# ---------------------------------------------------------------- 9. packages and updates
+out = ["PACKAGES AND UPDATES"]
+cenv = {**os.environ, "LC_ALL": "C"}
+try:
+    stamp = os.path.getmtime("/var/lib/apt/periodic/update-success-stamp")
+    lists_age = (now.timestamp() - stamp) / 86400
+except OSError:
+    lists_age = 99
+sim = subprocess.run(["apt-get", "-s", "-o", "Debug::NoLocking=1", "dist-upgrade"], capture_output=True, text=True, env=cenv)
+inst = [l for l in sim.stdout.splitlines() if l.startswith("Inst ")]
+sec = sorted({l.split()[1] for l in inst if "-security" in l})
+flag = warn(f"{len(sec)} security update(s) not installed: {', '.join(sec[:6])}") if sec else ""
+out.append(f"{flag}{len(sec)} security updates pending, {len(inst) - len(sec)} other updates pending"
+           + (f" ({', '.join(sorted({l.split()[1] for l in inst if '-security' not in l})[:6])})" if len(inst) > len(sec) else ""))
+flag = warn(f"apt package lists are {lists_age:.1f} days old (apt-daily not refreshing)") if lists_age > 2 else ""
+out.append(f"{flag}package lists refreshed {lists_age * 24:.0f} h ago" if lists_age < 99 else f"{flag}package lists: never refreshed")
+uu_prompt, uu_err, uu_kept, uu_last = set(), [], set(), None
+for l in read_all("/var/log/unattended-upgrades/unattended-upgrades.log*"):
+    m = re.match(r"(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ (\w+) (.*)", l)
+    if not m: continue
+    tl = dt.datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").replace(tzinfo=AST)
+    if tl < since: continue
+    if "Starting unattended upgrades script" in m.group(3): uu_last = max(uu_last or tl, tl)
+    pm = re.match(r"Package (\S+) has conffile prompt", m.group(3))
+    if pm: uu_prompt.add(pm.group(1))
+    if m.group(2) == "ERROR": uu_err.append(m.group(3)[:100])
+    km = re.match(r"Packages that are kept back: (.+)", m.group(3))
+    if km and km.group(1).strip(): uu_kept.update(km.group(1).split())
+flag = warn(f"update(s) SKIPPED because a config file was edited: {', '.join(sorted(uu_prompt))} — upgrade by hand") \
+    if uu_prompt else ""
+out.append(f"{flag}unattended-upgrades, last 7 days: {len(uu_prompt)} skipped for an edited config file"
+           f"{' (' + ', '.join(sorted(uu_prompt)) + ')' if uu_prompt else ''}, {len(uu_err)} ERROR lines, "
+           f"kept back: {', '.join(sorted(uu_kept)) or 'none'}; last run "
+           + (f"{uu_last:%a %b %d %H:%M} AST" if uu_last else "NOT in the last 7 days"))
+if uu_err:
+    warn(f"unattended-upgrades logged {len(uu_err)} ERROR line(s)"); out.append(f"    {uu_err[-1]}")
+if not uu_last:
+    warn("unattended-upgrades has not run in 7 days")
+q = subprocess.run(["dpkg-query", "-W", "-f=${db:Status-Abbrev}|${Version}", "sw-nginx"], capture_output=True, text=True)
+state = q.stdout.split("|")[0].strip() if q.returncode == 0 else "unknown"
+if state == "rc":
+    out.append("sw-nginx (Plesk's nginx): rc = removed, config registered, NOT installed — as it must be")
+elif state == "unknown":
+    out.append(warn("sw-nginx was PURGED (dpkg no longer knows it) — check /etc/nginx files still exist") +
+               "sw-nginx: GONE from dpkg = purged. Check /etc/nginx/nginx.conf, mime.types, fastcgi*, conf.d/fixssl.conf")
+else:
+    out.append(warn(f"sw-nginx (Plesk's nginx) is in dpkg state '{state}' — expected 'rc' (see CLAUDE.md)") +
+               f"sw-nginx: state '{state}' ({q.stdout.split('|')[-1]}) — Plesk's nginx may be INSTALLED")
+pol = subprocess.run(["apt-cache", "policy", "sw-nginx"], capture_output=True, text=True, env=cenv).stdout
+pin_ok = os.path.exists(SW_NGINX_PIN) and re.search(r"^Pin-Priority:\s*-1\s*$", open(SW_NGINX_PIN).read(), re.M)
+cand = (re.search(r"Candidate:\s*(\S+)", pol) or [None, "?"])[1]
+if pin_ok and cand == "(none)":
+    out.append(f"apt pin {SW_NGINX_PIN}: present, sw-nginx has no install candidate")
+else:
+    probs = ([] if pin_ok else [f"apt pin {SW_NGINX_PIN} is MISSING"]) + \
+            ([] if cand == "(none)" else [f"sw-nginx CAN be installed (candidate {cand})"])
+    out.append(warn("; ".join(probs)) + f"apt pin: {'present' if pin_ok else 'MISSING'}, sw-nginx candidate {cand}")
+own = subprocess.run(["dpkg", "-S", "/usr/sbin/nginx"], capture_output=True, text=True).stdout.split(":")[0]
+if own != "nginx-core":
+    out.append(warn(f"/usr/sbin/nginx belongs to '{own or 'no package'}', not Ubuntu's nginx-core") +
+               f"/usr/sbin/nginx owner: {own or 'none'}")
+osr = dict(l.strip().split("=", 1) for l in open("/etc/os-release") if "=" in l)
+ver = osr.get("VERSION_ID", "").strip('"')
+try:
+    pro = bool(json.load(open("/var/lib/ubuntu-advantage/status.json")).get("attached"))
+except Exception:
+    pro = False
+if ver == "22.04":
+    if now >= dt.datetime(2027, 1, 1, tzinfo=AST) and not pro:
+        out.append(warn("Ubuntu 22.04 support ends April 2027: plan Ubuntu Pro or 24.04") +
+                   "Ubuntu 22.04 support ends April 2027: plan Ubuntu Pro or 24.04")
+    else:
+        out.append(f"Ubuntu 22.04, Ubuntu Pro {'attached' if pro else 'not attached'}"
+                   + ("" if pro else " (support ends April 2027; this becomes a warning from Jan 2027)"))
+else:
+    out.append(f"Ubuntu {ver}")
+sections.append(out)
+
+# ---------------------------------------------------------------- 10. Let's Encrypt: Plesk errors, drift checker
+out = ["LET'S ENCRYPT (Plesk renewal errors; nginx cert drift checker), last 7 days"]
+le_err = []
+for l in read_all("/var/log/plesk/panel.log*"):
+    m = re.match(r"\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\.\d+\] \S+ (ERR|WARN|CRIT)\s+\[extension/(?:letsencrypt|sslit)\] (.*)", l)
+    if m and dt.datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").replace(tzinfo=AST) >= since:
+        le_err.append(f"{m.group(1)[5:16]} {m.group(2)} {m.group(3)[:100]}")
+flag = warn(f"{len(le_err)} Let's Encrypt error/warning line(s) in Plesk's panel.log") if le_err else ""
+out.append(f"{flag}Plesk panel.log: {len(le_err)} Let's Encrypt ERR/WARN lines")
+out += [f"    {e}" for e in le_err[-3:]]
+dl = [l for l in tail_lines("/var/log/le-cert-renewal-check.log") if re.match(r"\d{4}-\d\d-\d\dT\S+Z ", l)
+      and iso(l.split()[0]) >= since]
+fails = [l for l in dl if " FAIL" in l]
+flag = warn(f"cert drift checker: {len(fails)} FAIL line(s)") if fails else ""
+last = iso(dl[-1].split()[0]) if dl else None
+out.append(f"{flag}drift checker: {len(fails)} FAIL, {sum(' no-op' in l for l in dl)} no-op, "
+           f"{len(dl) - len(fails) - sum(' no-op' in l for l in dl)} other lines; last run "
+           + (f"{last.astimezone(AST):%a %b %d %H:%M} AST" if last else "none in 7 days")
+           + f"; next {next_drift_check():%a %b %d %H:%M} AST")
+out += [f"    {l[:120]}" for l in fails[-2:]]
+sections.append(out)
+
 # ---------------------------------------------------------------- compose + send
 ok = not issues
-subject = (f"{'✅' if ok else '⚠️'} Chess Puerto Rico Coffee — weekly health report, {now.astimezone(AST):%a %b %d, %Y}"
+kind = f"health report ({args.label})" if args.label else "weekly health report"
+subject = (f"{'✅' if ok else '⚠️'} Chess Puerto Rico Coffee — {kind}, {now.astimezone(AST):%a %b %d, %Y}"
            + ("" if ok else f" — {len(issues)} item(s) need attention") + (" [test]" if args.test else ""))
-body = [f"Weekly health report for chesspuertoricocoffee.com — {now.astimezone(AST):%Y-%m-%d %H:%M} AST",
+body = [f"{kind[0].upper() + kind[1:]} for chesspuertoricocoffee.com — {now.astimezone(AST):%Y-%m-%d %H:%M} AST",
         "Everything checked is OK." if ok else "NEEDS ATTENTION:"]
 body += [f"  - {i}" for i in issues]
 for sec in sections:
@@ -287,7 +504,8 @@ except Exception as e:
     result = f"SEND FAILED {type(e).__name__}: {str(e)[:120]}"
 with open(LOG, "a") as f:
     f.write(f"{now:%Y-%m-%dT%H:%M:%SZ} RUN {'OK' if ok else 'WARN'} issues={len(issues)} {result}\n")
-print(result)
+if sys.stdout.isatty():   # cron: stay silent on success (cron mails any output to MAILTO)
+    print(result)
 if result.startswith("SEND FAILED"):
     print(f"chess-health-report: {result}", file=sys.stderr); sys.exit(1)
 PY

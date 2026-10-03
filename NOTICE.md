@@ -44,7 +44,11 @@ source-disclosure requirements.
   the branding snippet corrects the player's hardcoded `origin=https://lichess.org` to this site's domain.
 - (2026-10) **Weekly health report:** `ops/chess-health-report.sh` + cron (Mondays) e-mails a read-only
   summary (backups, disk, TLS expiry, cron results, containers, error counts, memory) through the site's own
-  SMTP account; credentials are read at run time from a root-only file that is not published.
+  SMTP account; credentials are read at run time from a root-only file that is not published. Since
+  2026-10-03 it also checks the nginx :443/:80 listeners, every nginx-loaded config file against the private
+  config-backup repo, pending security updates and updates skipped over edited config files, that Plesk's
+  own nginx package stays uninstalled (apt pin), Let's Encrypt renewal errors and renewed-but-unserved
+  certificates; `--label` marks an extra run, and it stays silent under cron when the mail was sent.
 - (2026-10) **Logo:** the Lichess knight is replaced everywhere it appeared —
   favicons, Safari mask icon (removed), Open Graph image, web-app manifest
   (`public/static/prcoffee/manifest.json`: name "Chess Puerto Rico Coffee",

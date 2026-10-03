@@ -12,3 +12,8 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 MAILTO=admin@example.com   # sanitized: set your admin address
 
 0 9 * * 1 root /usr/local/bin/chess-health-report.sh
+
+# ONE-OFF extra run (owner request 2026-10-03): confirm Plesk renewed the 6 certificates that expire Nov 02 2026
+# (the other sites on this server). 14:00 AST Sun Oct 04 = one hour after the
+# 13:00 AST cert drift check, so it sees both Plesk's renewal and nginx serving it. Year-guarded; delete afterwards.
+0 14 4 10 * root [ "$(date +\%Y)" = 2026 ] && /usr/local/bin/chess-health-report.sh --label "Let's Encrypt renewal check"
