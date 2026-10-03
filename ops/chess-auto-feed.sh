@@ -14,9 +14,10 @@
 #   2. Our MongoDB, since the previous auto post (for the very first one: since the newest
 #      published post): finished games (imports excluded), finished arenas + swiss with >= 2
 #      players, new enabled accounts. Zero counts are left out, never shown as "0".
-#   3. The next scheduled NON-hourly arena + /training/daily. lila deletes an empty
-#      tournament when it ends (TournamentApi.scala `case 0 => destroy`), so an hourly link
-#      404s within ~2 h; a daily/weekly/monthly one stays valid far longer.
+#   3. The next scheduled NON-hourly arena (name + time; an hourly one is over before most
+#      readers see the post) + /training/daily. The name links to /tournament, the list page,
+#      never to the tournament itself: lila deletes an empty tournament when it ends
+#      (TournamentApi.scala `case 0 => destroy`), so a per-tournament link eventually 404s.
 #
 # Safety:
 #   - Lichess down / 429 / bad JSON -> our own data only. No events AND no non-zero counts
@@ -265,8 +266,8 @@ if stats:
                  + " · ".join(stats))
 tail = []
 nxt = st["next"]
-if nxt and re.fullmatch(r"[A-Za-z0-9]{8}", str(nxt["id"])):
-    tail.append(f"📅 **Next tournament:** [{md(nxt['name'], 60)}](/tournament/{nxt['id']}) — {when(nxt['startsAt'])}")
+if nxt:
+    tail.append(f"📅 **Next tournament:** [{md(nxt['name'], 60)}](/tournament) — {when(nxt['startsAt'])}")
 tail.append("🧩 [Puzzle of the Day](/training/daily)")
 parts.append(" · ".join(tail))
 parts.append(SPONSOR)
