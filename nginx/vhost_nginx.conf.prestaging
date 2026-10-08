@@ -54,6 +54,13 @@ if ($host = www.chesspuertoricocoffee.com) {
 }
 
 include /etc/nginx/snippets/dotfile-deny.conf;
+# 2026-10-08 (security, GHSA-f5v5-272f-4q4f): our lila (f9e0e4c) reads a "bgImg" QUERY parameter into the page
+# (RequestPref paramOrSession) = HTML injection from a crafted link, and this site's CSP is only Report-Only.
+# Upstream removed the parameter; until we upgrade, refuse it here. Play URL-decodes parameter NAMES, so the
+# percent-encoded spellings (bg%49mg ...) are matched too. Server-level `if`: runs before location selection.
+if ($args ~* "(^|&)(b|%62|%42)(g|%67|%47)(i|%69|%49)(m|%6d|%4d)(g|%67|%47)(=|&|$)") {
+        return 400;
+}
 # 2026-10-02 (fix item 10): robots.txt-allowed AI/search crawlers (maps + zone in
 # /etc/nginx/conf.d/chess-ratelimit.conf): 403 on heavy paths, 1 r/s per crawler family.
 if ($chess_ai_bot_forbidden) {
@@ -306,6 +313,20 @@ location = /tv {
         include /etc/nginx/snippets/chess-branding.conf;
         proxy_intercept_errors on;
         error_page 404 = /games;
+}
+# 2026-10-08 (security, GHSA-x3x9-ww58-wcg2): POST /api/puzzle/batch/:angle validates a JSON array at a cost that
+# grows quadratically; one unauthenticated ~500 KB body pins a CPU. A real batch is ~2 KB. Fixed upstream after our
+# lila (f9e0e4c); until we upgrade, cap the body here (413 above 32 KB). No add_header in this block, so the
+# server-level HSTS still applies; JSON only, so no branding include.
+location ^~ /api/puzzle/batch/ {
+        client_max_body_size 32k;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host chesspuertoricocoffee.com;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_buffering off;
 }
 location / {
         proxy_pass http://127.0.0.1:8080;

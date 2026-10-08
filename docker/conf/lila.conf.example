@@ -84,3 +84,8 @@ explorer.tablebase_endpoint = "https://tablebase.lichess.ovh"
 # Chain is: client -> nginx (adds X-Forwarded-For) -> 127.0.0.1:8080 -> Caddy -> lila:9663
 play.http.forwarded.version = x-forwarded
 play.http.forwarded.trustedProxies = ["172.18.0.0/16", "127.0.0.1", "::1"]
+
+# lila base.conf ships a PUBLIC cookie-signing key; with it, a forged signed session ("email_confirm=<user>:<email>")
+# can take over accounts awaiting email confirmation (GHSA-622v-64xr-xvm9). Set your own random key
+# (e.g. `openssl rand -hex 64`), keep it private. Changing it logs everyone out once; lila-ws does not use it.
+play.http.secret.key = "REPLACE_WITH_RANDOM_128_HEX"
