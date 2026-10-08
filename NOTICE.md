@@ -144,6 +144,16 @@ source-disclosure requirements.
   names), the site's own game/tournament/new-player counts, and the next scheduled
   tournament. It skips runs with nothing new, never deletes posts (older ones are set
   non-public), and backs up the collection before every write.
+- **ops/chess-boot-heal.sh** + **ops/chess-boot-heal.service** (2026-10): after Docker
+  starts, checks that lila-ws, lila-fishnet and lila each subscribed to their Redis
+  channel and restarts (once) a lila-ws or lila-fishnet container that never connected.
+  Docker restarts all containers in parallel at boot; lila-ws once lost the race to
+  resolve the Redis host, and its JVM stayed running with a dead main thread, so no
+  WebSocket worked. lila itself is only reported, never restarted.
+- **ops/chess-ai-game-test.py** (2026-10): end-to-end test of play against the
+  computer — creates an anonymous game through the normal setup form, plays it over
+  the same WebSocket a browser uses, waits for the engine's move and aborts the game.
+  Standard library only.
 - **contact-api/** (2026-10): the small Node.js contact-form backend
   (`server.js`, sends via authenticated SMTP; credentials come from an
   environment file that is not published; recipient address sanitized).

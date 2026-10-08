@@ -1,0 +1,22 @@
+[Unit]
+# 2026-10-08: dockerd restarts every container in parallel at boot. lila_ws lost the race to resolve 'redis', its JVM
+# stayed alive with a dead main thread ("Up" but port 9664 closed), and every chess WebSocket — including play with
+# the computer — was down until it was restarted by hand. The script checks each Redis subscriber and restarts only a
+# container that never connected. See /usr/local/sbin/chess-boot-heal.sh.
+#
+# Type=simple so boot (multi-user.target) never waits for it; RemainAfterExit keeps "active (exited)" on success and
+# "failed" (visible in systemctl --failed) when something could not be healed.
+# PartOf + WantedBy=docker.service: it re-runs whenever docker.service is restarted, or stopped and started again.
+Description=Chess (lila-docker): restart a container that failed to connect to Redis at startup
+After=docker.service docker-port-guard.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=simple
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/chess-boot-heal.sh
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target docker.service
