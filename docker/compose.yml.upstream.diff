@@ -1,22 +1,25 @@
+diff --git a/compose.yml b/compose.yml
+index bda4f5a..ac51f76 100644
 --- a/compose.yml
 +++ b/compose.yml
-@@ -1,45 +1,45 @@
-----
- include:
-   - compose-lila-ws-${LILA_WS_CONTAINER:-image}.yml
-   - compose-search.yml
+@@ -5,10 +5,15 @@ include:
  
  services:
--  openingexplorer:
--    image: ghcr.io/lichess-org/lila-openingexplorer:latest
--    restart: unless-stopped
--    ports:
+   openingexplorer:
++    # upstream added this WITHOUT a profile (= always started). Opt-in here: this site uses its configured
++    # explorer endpoint, and an unprofiled service would start on every `up`. Port loopback-bound like the others
++    # (a 0.0.0.0 publication is internet-reachable: docker DNATs before the host's INPUT DROP).
+     image: ghcr.io/lichess-org/lila-openingexplorer:latest
+     restart: unless-stopped
++    profiles:
++      - explorer
+     ports:
 -      - 9002:9002
--    volumes:
--      - openingexplorer-data:/app/_db
--    environment:
--      - LILA_URL=http://caddy
--      - EXPLORER_BEARER=lip_openingexplorer
++      - 127.0.0.1:9002:9002
+     volumes:
+       - openingexplorer-data:/app/_db
+     environment:
+@@ -17,27 +22,36 @@ services:
    mongodb:
      image: mongo:7.0.28-jammy
      restart: unless-stopped
@@ -46,16 +49,15 @@
      volumes:
        - ./repos/lila:/lila
        - ./scripts:/scripts
-+      - mongo_data_primary:/data/db
-     profiles:
-       - base
+-    profiles:
+-      - base
 -  mongodb_secondary:
 -    image: mongo:7.0.28-jammy
 -    restart: unless-stopped
 -    command: mongod --bind_ip_all --replSet rs0
--    profiles:
--      - base
-+
++      - mongo_data_primary:/data/db
+     profiles:
+       - base
    redis:
      image: redis:8.0.3-alpine3.21
      restart: unless-stopped
@@ -63,11 +65,8 @@
 +      - redis_data:/data
      profiles:
        - base
-+
    lila:
-     build:
-       context: docker
-@@ -54,8 +54,15 @@
+@@ -54,8 +68,15 @@ services:
      environment:
        - LILA_DOMAIN=${LILA_DOMAIN:-localhost:8080}
        - LILA_URL=${LILA_URL:-http://localhost:8080}
@@ -85,12 +84,7 @@
        - ENABLE_RATE_LIMITING=${ENABLE_RATE_LIMITING:-true}
      volumes:
        - ./repos/lila:/lila
-@@ -67,11 +74,22 @@
-       - ./conf/firebase-service-account.json:/opt/firebase-service-account.json:ro
-     profiles:
-       - base
-+
-   caddy:
+@@ -71,7 +92,17 @@ services:
      image: caddy:2.10.2-alpine
      restart: unless-stopped
      ports:
@@ -109,13 +103,7 @@
      environment:
        - LILA_DOMAIN=${LILA_DOMAIN:-localhost:8080}
        - LILA_URL=${LILA_URL:-http://localhost:8080}
-@@ -81,16 +99,20 @@
-       - ./static:/static
-     profiles:
-       - base
-+
-   mono:
-     image: ghcr.io/lichess-org/lila-docker:main
+@@ -86,6 +117,8 @@ services:
      restart: unless-stopped
      ports:
        - 8080:8080
@@ -124,76 +112,16 @@
      environment:
        - LILA_DOMAIN=${LILA_DOMAIN:-localhost:8080}
        - LILA_URL=${LILA_URL:-http://localhost:8080}
-     profiles:
-       - quick
-+
-   api_docs:
-     build:
-       context: docker
-@@ -99,10 +121,7 @@
-         GROUP_ID: ${GROUP_ID:-}
-       dockerfile: ui.Dockerfile
-     working_dir: /api/doc
--    entrypoint:
--      - /bin/sh
--      - -c
--      - pnpm install && pnpm dev --host 0.0.0.0
-+    entrypoint: ["/bin/sh", "-c", "npm install && npm run serve -- --host=0.0.0.0"]
-     restart: unless-stopped
-     user: ${USER_ID:-}:${GROUP_ID:-}
-     ports:
-@@ -111,6 +130,7 @@
-       - ./repos/api:/api
-     profiles:
-       - api-docs
-+
-   chessground:
-     build:
-       context: docker
-@@ -118,10 +138,7 @@
-         USER_ID: ${USER_ID:-}
-         GROUP_ID: ${GROUP_ID:-}
-       dockerfile: ui.Dockerfile
--    entrypoint:
--      - /bin/sh
--      - -c
--      - pnpm install && pnpm run compile && pnpx http-server -p 8080
-+    entrypoint: ["/bin/sh", "-c", "pnpm install && pnpm run compile && pnpx http-server -p 8080"]
-     restart: unless-stopped
-     user: ${USER_ID:-}:${GROUP_ID:-}
-     ports:
-@@ -131,6 +148,7 @@
-       - ./.pnpm-store:/.pnpm-store
-     profiles:
-       - chessground
-+
-   pgn_viewer:
-     build:
-       context: docker
-@@ -138,10 +156,7 @@
-         USER_ID: ${USER_ID:-}
-         GROUP_ID: ${GROUP_ID:-}
-       dockerfile: ui.Dockerfile
--    entrypoint:
--      - /bin/sh
--      - -c
--      - pnpm install && pnpm run demo
-+    entrypoint: ["/bin/sh", "-c", "pnpm install && pnpm run demo"]
-     restart: unless-stopped
-     user: ${USER_ID:-}:${GROUP_ID:-}
-     ports:
-@@ -151,8 +166,9 @@
-       - ./.pnpm-store:/.pnpm-store
+@@ -152,7 +185,7 @@ services:
      profiles:
        - pgn-viewer
-+
    lila_engine:
 -    image: rust:1.95.0-trixie
-+    image: rust:1.89.0-trixie
++    image: rust:1.89.0-trixie  # kept at 1.89 on 2026-10-08: lila-gif/push/engine were not part of the lila upgrade; 1.95 would rebuild them
      working_dir: /lila-engine
      entrypoint: cargo run -- --bind 0.0.0.0:9666 --mongodb mongodb://mongodb
      restart: unless-stopped
-@@ -160,11 +176,15 @@
+@@ -160,7 +193,10 @@ services:
      environment:
        - LILA_ENGINE_LOG=lila_engine=debug,tower_http=debug
      ports:
@@ -205,63 +133,39 @@
      volumes:
        - ./repos/lila-engine:/lila-engine
      profiles:
-       - external-engine
-+
-   lila_fishnet:
-     build:
-       context: docker
-@@ -183,16 +203,17 @@
-       - ./repos/lila-fishnet:/lila-fishnet
+@@ -184,22 +220,22 @@ services:
      profiles:
        - stockfish-play
-+
    fishnet_play:
-     image: niklasf/fishnet:2.12.0
+-    image: niklasf/fishnet:2.12.0
++    image: niklasf/fishnet:2.15.0
      restart: unless-stopped
      environment:
        - ENDPOINT=http://lila_fishnet:9665/fishnet
--      - KEY=fishnetplaydev
+       - KEY=fishnetplaydev
        - MAX_BACKOFF=5
-       - STATS_FILE=/stats.json
+-      - STATS_FILE=/stats.json
++      - STATS_FILE=/tmp/stats.json  # fishnet >= 2.15 runs as uid 10001 (not root): / is not writable
      profiles:
        - stockfish-play
-+
    fishnet_analysis:
-     image: niklasf/fishnet:2.12.0
+-    image: niklasf/fishnet:2.12.0
++    image: niklasf/fishnet:2.15.0
      restart: unless-stopped
-@@ -202,6 +223,7 @@
-       - STATS_FILE=/stats.json
+     environment:
+       - ENDPOINT=http://lila:9663/fishnet
+       - MAX_BACKOFF=5
+-      - STATS_FILE=/stats.json
++      - STATS_FILE=/tmp/stats.json  # fishnet >= 2.15 runs as uid 10001 (not root): / is not writable
      profiles:
        - stockfish-analysis
-+
    python:
-     build:
-       context: docker
-@@ -212,6 +234,7 @@
-       - ./scripts:/scripts
+@@ -231,26 +267,31 @@ services:
      profiles:
        - utils
-+
-   ui:
-     build:
-       context: docker
-@@ -222,7 +245,7 @@
-     restart: unless-stopped
-     user: ${USER_ID:-}:${GROUP_ID:-}
-     environment:
--      - CI=1  # to disable pnpm install prompts
-+      - CI=1 # to disable pnpm install prompts
-     volumes:
-       - ./repos/lila:/lila
-       - ./repos/chessground:/chessground
-@@ -230,50 +253,66 @@
-       - ./.pnpm-store:/.pnpm-store
-     profiles:
-       - utils
-+
    lila_gif:
 -    image: rust:1.95.0-trixie
-+    image: rust:1.89.0-trixie
++    image: rust:1.89.0-trixie  # kept at 1.89 on 2026-10-08: lila-gif/push/engine were not part of the lila upgrade; 1.95 would rebuild them
      working_dir: /lila-gif
      entrypoint: cargo run -- --bind 0.0.0.0:6175
      restart: unless-stopped
@@ -276,10 +180,9 @@
        - ./repos/lila-gif:/lila-gif
      profiles:
        - gifs
-+
    lila_push:
 -    image: rust:1.95.0-trixie
-+    image: rust:1.89.0-trixie
++    image: rust:1.89.0-trixie  # kept at 1.89 on 2026-10-08: lila-gif/push/engine were not part of the lila upgrade; 1.95 would rebuild them
      working_dir: /lila-push
 -    entrypoint: cargo run --release -- --vapid private.pem --vapid-subject mailto:contact@lichess.org
 -      --bind 0.0.0.0:9054
@@ -295,10 +198,7 @@
      volumes:
        - ./repos/lila-push:/lila-push
        - ./conf/private.pem:/lila-push/private.pem
-     profiles:
-       - push
-+
-   picfit:
+@@ -260,8 +301,11 @@ services:
      build:
        context: docker
        dockerfile: picfit.Dockerfile
@@ -312,10 +212,7 @@
      volumes:
        - ./conf/picfit.json:/mnt/config.json
        - ./docker/assets:/uploads
-     profiles:
-       - thumbnails
-+
-   mailpit:
+@@ -271,7 +315,10 @@ services:
      image: axllent/mailpit:v1.27.7
      restart: unless-stopped
      ports:
@@ -326,27 +223,8 @@
 +      - 127.0.0.1:8025:8025
      profiles:
        - email
-+
    mongo_express_primary:
-     image: mongo-express:1.0.2-20-alpine3.19
-     restart: unless-stopped
-@@ -286,6 +325,7 @@
-       - mongodb
-     profiles:
-       - mongo-express
-+  
-   prometheus:
-     image: prom/prometheus:v3.5.0
-     volumes:
-@@ -294,6 +334,7 @@
-       - 9090:9090
-     profiles:
-       - monitoring
-+
-   influxdb:
-     image: influxdb:2.7.12-alpine
-     restart: unless-stopped
-@@ -309,10 +350,25 @@
+@@ -309,10 +356,28 @@ services:
      profiles:
        - monitoring
  
@@ -375,3 +253,6 @@
 +  redis_data:
 +    external: true
 +    name: 9ecacfab0339b71f9a366529ef533ea92a6706a8e2578e38e12748b3106c0a25
++
++  # upstream 2026: local opening explorer (opt-in profile "explorer", see the service)
++  openingexplorer-data:

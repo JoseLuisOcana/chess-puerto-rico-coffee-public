@@ -52,24 +52,27 @@
  security.email_confirm.enabled = true
  
  push.firebase.mobile.url = "https://fcm.googleapis.com/v1/projects/lichess-testing-df65f/messages:send"
--push.firebase.mobile.jsonPath = "/opt/firebase-service-account.json"
-+push.firebase.mobile.json = "/opt/firebase-service-account.json"
+ push.firebase.mobile.jsonPath = "/opt/firebase-service-account.json"
  push.web.url = "http://lila_push:9054"
 -push.web.vapid_public_key = "BDTVzVZ3_f83JgH1SJmZrhg-FNZ36Sixc_zrR1-1ZGVHUPmFeU6Q_-JQLN8NF5niYW_1jRU47aPczYA0FbgUCus"
 +push.web.vapid_public_key = "BDTVzVZ3_f83JgH1SJmZrhg-FNZ36Sixc_zrR1-1ZGVHUPmFeU6Q_-JQLN8NF5niYW_1jRU47aPczYA0FbgUCus="
  
  swiss.bbpairing = "/opt/bbpPairings/bbpPairings.exe"
  
-@@ -48,18 +55,32 @@
+@@ -48,18 +55,36 @@
  plan.stripe.keys.secret = "sk_test_123"
  plan.payPal.keys.public = "sb"
  
 -# streamer.twitch.endpoint = "http://caddy/static/twitch-streamers.json"
 -# streamer.twitch.client_id = "twitch-client-id"
 -# streamer.twitch.secret = "twitch-secret"
--
--turnstile.enabled = false
--
++streamer.twitch.endpoint = "http://caddy/static/twitch-streamers.json"
++streamer.twitch.client_id = "twitch-client-id"
++streamer.twitch.secret = "twitch-secret"
+ 
++# lila (2026) replaced hCaptcha with Cloudflare Turnstile; this site keeps it off (base.conf default).
+ turnstile.enabled = false
+ 
 -# turnstile.site_key = "1x00000000000000000000AA" # Always passes; Visible; Test successful form submissions
 -# turnstile.site_key = "2x00000000000000000000AB" # Always fails; Visible; Test error handling and retry logic
 -# turnstile.site_key = "1x00000000000000000000BB" # Always passes; Invisible; Test invisible widget success flows
@@ -79,14 +82,6 @@
 -turnstile.secret_key = "1x0000000000000000000000000000000AA" # Always passes validation; Test successful token validation
 -# turnstile.secret_key = "2x0000000000000000000000000000000AA" # Always fails validation; Test validation error handling
 -# turnstile.secret_key = "3x0000000000000000000000000000000AA" # Returns "token already spent" error; Test duplicate token handling
-+streamer.twitch.endpoint = "http://caddy/static/twitch-streamers.json"
-+streamer.twitch.client_id = "twitch-client-id"
-+streamer.twitch.secret = "twitch-secret"
-+
-+hcaptcha.enabled = false
-+hcaptcha.public_key = "10000000-ffff-ffff-ffff-000000000001"
-+hcaptcha.private_key = "CHANGEME_HCAPTCHA_PRIVATE_KEY"
-+
 +# Task 6+7: Opening explorer + tablebase via public lichess endpoints
 +explorer.internal_endpoint = "https://explorer.lichess.ovh"
 +explorer.endpoint = "https://explorer.lichess.ovh"
@@ -108,3 +103,8 @@
 +# Chain is: client -> nginx (adds X-Forwarded-For) -> 127.0.0.1:8080 -> Caddy -> lila:9663
 +play.http.forwarded.version = x-forwarded
 +play.http.forwarded.trustedProxies = ["172.18.0.0/16", "127.0.0.1", "::1"]
++
++# lila base.conf ships a PUBLIC cookie-signing key; with it, a forged signed session ("email_confirm=<user>:<email>")
++# can take over accounts awaiting email confirmation (GHSA-622v-64xr-xvm9). Set your own random key
++# (e.g. `openssl rand -hex 64`), keep it private. Changing it logs everyone out once; lila-ws does not use it.
++play.http.secret.key = "REPLACE_WITH_RANDOM_128_HEX"

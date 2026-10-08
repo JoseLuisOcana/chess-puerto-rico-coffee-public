@@ -1,36 +1,8 @@
+diff --git a/conf/Caddyfile b/conf/Caddyfile
+index 0d4bd26..ad215b2 100644
 --- a/conf/Caddyfile
 +++ b/conf/Caddyfile
-@@ -1,15 +1,13 @@
- :80
- 
--log
--
- handle_path /oops* {
- 	root * /lila/public/oops
- 	file_server
- }
- 
--# for http://localhost:8080/oops/icons.html
--handle_path /images* {
--	root * /lila/public/images
-+# for http://localhost:8080/oops/font.html
-+handle_path /font* {
-+	root * /lila/public/font
- 	file_server
- }
- 
-@@ -29,10 +27,6 @@
- 	reverse_proxy picfit:3001
- }
- 
--handle_path /explorer* {
--	reverse_proxy openingexplorer:9002
--}
--
- handle_path /embed/* {
- 	rewrite * /embed{uri}
- 	reverse_proxy lila:9663 {
-@@ -44,19 +38,46 @@
+@@ -47,14 +47,43 @@ handle_path /embed/* {
  }
  
  @websockets {
@@ -44,7 +16,6 @@
  	header_up Origin {$LILA_URL}
  }
  
--reverse_proxy lila:9663 {
 +# 2026-09-13: content-hashed assets are immutable — the filename carries the
 +# content hash, so the URL changes whenever the bytes change and the response can
 +# be cached forever. Previously these inherited the blanket no-store below, which
@@ -65,19 +36,15 @@
 +@immutable_assets path /assets/compiled/* /assets/css/* /assets/hashed/*
 +
 +reverse_proxy @immutable_assets lila:9663 {
- 	header_up Host {$LILA_DOMAIN}
- 	header_up Origin {$LILA_URL}
- 
--	# header_up X-Lichess-School true
++	header_up Host {$LILA_DOMAIN}
++	header_up Origin {$LILA_URL}
++
 +	# allow CORS for requests from web client on lichess.org/api
 +	header_down Access-Control-Allow-Origin "*"
 +
 +	header_down Cache-Control "public, max-age=31536000, immutable"
 +}
 +
-+reverse_proxy lila:9663 {
-+	header_up Host {$LILA_DOMAIN}
-+	header_up Origin {$LILA_URL}
- 
- 	# allow CORS for requests from web client on lichess.org/api
- 	header_down Access-Control-Allow-Origin "*"
+ reverse_proxy lila:9663 {
+ 	header_up Host {$LILA_DOMAIN}
+ 	header_up Origin {$LILA_URL}

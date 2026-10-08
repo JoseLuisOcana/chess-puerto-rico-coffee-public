@@ -5,6 +5,7 @@ import play.api.mvc.{ Cookie, Session, RequestHeader }
 import scalatags.Text.all.*
 
 import lila.core.config.*
+import lila.core.i18n.Translate
 import lila.core.i18n.I18nKey.emails as trans
 import lila.core.net.ValidReferrer
 import lila.mailer.Mailer
@@ -47,7 +48,7 @@ final class EmailConfirmMailer(
 
   def send(user: User, email: EmailAddress)(using lang: Lang, referrer: Option[ValidReferrer]): Funit =
     if email.looksLikeFakeEmail then
-      lila.log("auth").info(s"Not sending confirmation to fake email $email of ${user.username}")
+      loggerAuth.info(s"Not sending confirmation to fake email $email of ${user.username}")
       fuccess(())
     else
       email.looksLikeFakeEmail.not.so:
@@ -55,22 +56,15 @@ final class EmailConfirmMailer(
           lila.mon.email.send.confirmation.increment()
           val url = referrer.foldLeft(routeUrl(routes.Auth.signupConfirmEmail(token))): (url, ref) =>
             ref.propagate(url)
-          lila.log("auth").info(s"Confirm URL ${user.username} ${email.value} $url")
+          loggerAuth.info(s"Confirm URL ${user.username} ${email.value} $url")
           mailer.sendOrFail:
             Mailer.Message(
               to = email,
               // Chess Puerto Rico Coffee: every translation of this subject says "lichess.org".
               subject = trans.emailConfirm_subject.txt(user.username).replace("lichess.org", "Chess Puerto Rico Coffee"),
-              text = Mailer.txt.addServiceNote(s"""
-${trans.emailConfirm_click.txt()}
-
-$url
-
-${trans.common_orPaste.txt()}
-
-${trans.emailConfirm_justIgnore.txt("https://chesspuertoricocoffee.com")}
-"""),
+              text = Mailer.txt.addServiceNote(EmailConfirm.emailText(url)),
               htmlBody = emailMessage(
+                pDesc(trans.emailConfirm_intro()),
                 pDesc(trans.emailConfirm_click()),
                 potentialAction(metaName("Activate account"), Mailer.html.url(url)),
                 small(trans.emailConfirm_justIgnore()),
@@ -100,6 +94,83 @@ ${trans.emailConfirm_justIgnore.txt("https://chesspuertoricocoffee.com")}
   private val tokener = StringToken[UserId](
     secret = tokenerSecret,
     getCurrentValue = id => userRepo.email(id).dmap(_.so(_.value))
+  )
+
+final class EmailConfirmByUserSend(
+    securityForm: SecurityForm,
+    emailValidator: EmailAddressValidator,
+    userRepo: UserRepo,
+    mailer: lila.mailer.AutomaticEmail
+)(using Executor, lila.core.config.RateLimit):
+
+  case class Data(sender: EmailAddress, to: EmailAddress):
+    def userAndMillis: Option[(UserStr, Int)] =
+      to.username.split('.') match
+        case Array(u, m) => for user <- UserStr.read(u); millis <- m.toIntOption yield user -> millis
+        case _ => none
+
+  import play.api.data.*
+  import play.api.data.Forms.*
+  import lila.memo.RateLimit
+
+  def workerForm(using Me) = Form:
+    mapping(
+      "sender" -> securityForm.sendableEmail, // player.email@example.com
+      "to" -> securityForm.anyEmail // username.millis@verify.lichess.org
+    )(Data.apply)(unapply)
+
+  enum Result:
+    case invalid, notFound, rateLimit, milliMismatch, alreadyConfirmed, emailInUse
+    case confirm(user: User, email: EmailAddress) extends Result
+
+  def process(data: Data)(using Me): Fu[Option[(User, EmailAddress)]] =
+    resultOf(data)
+      .addEffect: res =>
+        logger.info(s"emailConfirmByUser $res $data")
+        val resKey = res match
+          case Result.confirm(_, _) => "success"
+          case r => r.toString
+        lila.mon.user.register
+          .modConfirmEmail(by = "worker", result = resKey)
+          .increment()
+      .flatMap:
+        case Result.confirm(user, email) =>
+          given Lang = user.realLang | lila.core.i18n.defaultLang
+          for
+            _ <- mailer.welcomeEmail(user, email)
+            _ <- mailer.welcomePM(user)
+          yield Some(user -> email)
+        case Result.emailInUse =>
+          for _ <- mailer.emailAlreadyInUse(data.sender)
+          yield none
+        case Result.alreadyConfirmed =>
+          for _ <- mailer.alreadyConfirmed(data.sender)
+          yield none
+        case _ => fuccess(none) // don't send an email
+
+  private def resultOf(d: Data): Fu[Result] =
+    d.userAndMillis.fold(fuccess(Result.invalid)): (userId, millis) =>
+      userRepo
+        .enabledById(userId)
+        .flatMap:
+          _.fold(fuccess(Result.notFound)): user =>
+            rateLimitPerUser(user.id, fuccess(Result.rateLimit)):
+              rateLimitPerEmail(d.sender, fuccess(Result.rateLimit)):
+                if EmailConfirm.creationMillis(user) != millis then fuccess(Result.milliMismatch)
+                else if user.everLoggedIn then fuccess(Result.alreadyConfirmed)
+                else
+                  for ok <- emailValidator.uniqueAsync(d.sender, user.some)
+                  yield if ok then Result.confirm(user, d.sender) else Result.emailInUse
+
+  private lazy val rateLimitPerUser = RateLimit[UserId](
+    credits = 4,
+    duration = 1.hour,
+    key = "user.email.confirm.user"
+  )
+  private lazy val rateLimitPerEmail = RateLimit[EmailAddress](
+    credits = 4,
+    duration = 1.hour,
+    key = "user.email.confirm.email"
   )
 
 object EmailConfirm:
@@ -134,6 +205,9 @@ object EmailConfirm:
   given Executor = scala.concurrent.ExecutionContextOpportunistic
   given lila.core.config.RateLimit = lila.core.config.RateLimit.Yes
 
+  def creationMillis(user: User) =
+    user.createdAt.atZone(java.time.ZoneOffset.UTC).getNano / 1_000_000
+
   private lazy val rateLimitPerIP = RateLimit[IpAddress](
     credits = 40,
     duration = 1.hour,
@@ -166,7 +240,7 @@ object EmailConfirm:
       case Closed(name: UserName)
       case Confirmed(name: UserName)
       case NoEmail(name: UserName)
-      case EmailSent(name: UserName, email: EmailAddress)
+      case EmailSent(name: UserName, email: EmailAddress, sendTo: EmailAddress)
 
     import play.api.data.*
     import play.api.data.Forms.*
@@ -189,5 +263,20 @@ object EmailConfirm:
                   if _ then
                     emails.current match
                       case None => NoEmail(user.username)
-                      case Some(email) => EmailSent(user.username, email)
+                      case Some(email) =>
+                        val sendTo = EmailAddress:
+                          s"${user.username}.${EmailConfirm.creationMillis(user)}@verify.lichess.org"
+                        EmailSent(user.username, email, sendTo)
                   else Confirmed(user.username)
+
+  private[security] def emailText(url: Url)(using Translate) = s"""
+${trans.emailConfirm_intro.txt()}
+
+${trans.emailConfirm_click.txt()}
+
+$url
+
+${trans.common_linkNotWorking.txt()}
+
+${trans.emailConfirm_justIgnore.txt("https://chesspuertoricocoffee.com")}
+"""

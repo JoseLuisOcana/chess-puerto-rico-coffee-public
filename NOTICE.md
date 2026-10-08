@@ -193,14 +193,25 @@ The sign-up confirmation e-mail said "Confirm your lichess.org account":
 
 - `javaOptions` heap of the forked application JVM: `-Xmx512m` → `-Xmx2g`.
 
+### modules/pref/src/main/Pref.scala (2026-10)
+
+- Default background for visitors who are not logged in: `Bg.SYSTEM` → `Bg.DARK`.
+  Upstream changed this default from dark to "follow the device theme" in 2026; this site's
+  branding is designed for the dark theme. Account holders keep upstream's default.
+
 Each file is in `lila-modifications/` with an `.upstream.diff` generated with
-`git diff` against the deployed upstream lila commit (`f9e0e4c`).
+`git diff` against the deployed upstream lila commit (`f5b261e`, deployed 2026-10-08;
+previously `f9e0e4c`). The same four files carry the only source changes.
 
 ## Upstream versions
 
 The deployment tracks the upstream Lichess repositories directly from
 github.com/lichess-org. For the exact upstream commit currently deployed,
 consult the docker-compose image tags in `docker/compose.yml`.
+
+Deployed since 2026-10-08: lila `f5b261e` (+ the modifications above), lila-ws image pinned by
+digest in `docker/compose-lila-ws-image.yml`, lila-fishnet `3837bbc`, fishnet `2.15.0`, lila-docker
+upstream `f1e918c` merged with this site's compose changes (`docker/*.upstream.diff`).
 
 ---
 

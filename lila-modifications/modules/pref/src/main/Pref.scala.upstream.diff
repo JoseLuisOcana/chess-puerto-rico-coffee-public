@@ -1,0 +1,15 @@
+diff --git a/modules/pref/src/main/Pref.scala b/modules/pref/src/main/Pref.scala
+index 5d4b459cb8..8edd77dc52 100644
+--- a/modules/pref/src/main/Pref.scala
++++ b/modules/pref/src/main/Pref.scala
+@@ -472,7 +472,9 @@ object Pref:
+ 
+   lazy val default = Pref(
+     id = UserId(""),
+-    bg = Bg.SYSTEM,
++    // Chess Puerto Rico Coffee: upstream changed the ANONYMOUS default DARK -> SYSTEM (2026). Keep dark: the coffee
++    // branding is built for it, and lila before this upgrade always served dark to visitors.
++    bg = Bg.DARK,
+     bgImg = none,
+     is3d = false,
+     theme = Theme.default.name,

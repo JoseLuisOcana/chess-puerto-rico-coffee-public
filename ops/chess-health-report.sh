@@ -19,6 +19,7 @@
 #   - last REAL run of each cron (dry-runs are ignored): result, and age against its schedule
 #       puzzle recycle 04:15 daily (26 h), mongodump 03:30 daily (26 h), auto-feed Mon+Thu 08:00 (4.5 days),
 #       video refresh Sun 07:00 (8 days), bgjobs cleanup Sun 04:45 (8 days)
+#   - versions of the chess stack (lila commit + local commits, lila-fishnet, lila-ws image, fishnet, mongo/redis), informational
 #   - lila-docker containers: any not running, unhealthy, or with RestartCount > 0 — except EXPECTED_STOPPED below:
 #     elasticvue (Elasticsearch web UI) and mailpit (dev mail catcher; real mail goes through IONOS) are dev tools in the
 #     active `search`/`email` profiles that have been stopped on purpose since 2026-09-13; they are listed, not flagged.
@@ -258,6 +259,28 @@ for c in json.loads(subprocess.run(["docker", "inspect", *ids], capture_output=T
                    f"{name:24} {stt['Status']}, health {health}, restarts {rc}")
 out.insert(1, f"{len(ids)} containers: {len(ids) - bad - len(expected_down)} running with 0 restarts" + ("" if bad else " — all OK"))
 out += [f"  {x}" for x in expected_down]
+sections.append(out)
+
+# ---------------------------------------------------------------- 5b. versions (added 2026-10-08 with the lila upgrade)
+def git_info(repo, *args):
+    r = subprocess.run(["git", "--no-optional-locks", "-c", "safe.directory=*", "-C", f"{PROJECT}/repos/{repo}", *args],
+                       capture_output=True, text=True)
+    return r.stdout.strip() or "?"
+def image_of(svc):
+    r = subprocess.run(["docker", "inspect", "-f", "{{.Config.Image}}", f"lila-docker-{svc}-1"], capture_output=True, text=True)
+    i = r.stdout.strip() or "?"
+    return i.split("@sha256:")[0] + "@" + i.split("@sha256:")[1][:12] if "@sha256:" in i else i
+try:
+    sbt = [l.split("=", 1)[1].strip() for l in open(f"{PROJECT}/repos/lila/project/build.properties") if l.startswith("sbt.version")][0]
+except (OSError, IndexError):
+    sbt = "?"
+out = ["VERSIONS (chess stack; upgraded 2026-10-08, see the upgrade section of CLAUDE.md)",
+       f"lila          {git_info('lila', 'log', '-1', '--format=%h %cs')} = upstream {git_info('lila', 'log', '-1', '--format=%h %cs', 'master')}"
+       f" + {git_info('lila', 'rev-list', '--count', 'master..HEAD')} local commit(s); sbt {sbt}",
+       f"lila-fishnet  {git_info('lila-fishnet', 'log', '-1', '--format=%h %cs')}",
+       f"lila-ws       {image_of('lila_ws')}",
+       f"fishnet       {image_of('fishnet_play')}",
+       f"mongo / redis {image_of('mongodb')} / {image_of('redis')}"]
 sections.append(out)
 
 # ---------------------------------------------------------------- 6. errors, last 7 days

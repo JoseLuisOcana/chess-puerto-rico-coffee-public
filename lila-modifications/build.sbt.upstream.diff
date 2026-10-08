@@ -1,8 +1,8 @@
 diff --git a/build.sbt b/build.sbt
-index 356b7ad..c27c9a6 100644
+index 73d5df25e5..f305c0e49f 100644
 --- a/build.sbt
 +++ b/build.sbt
-@@ -14,7 +14,9 @@ lazy val root = Project("lila", file("."))
+@@ -45,7 +45,9 @@ lazy val root = Project("lila", file("."))
  
  organization := "org.lichess"
  Compile / run / fork := true

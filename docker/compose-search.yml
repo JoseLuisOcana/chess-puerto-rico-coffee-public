@@ -1,3 +1,4 @@
+---
 services:
   elasticsearch:
     image: elasticsearch:7.17.4
@@ -18,7 +19,6 @@ services:
       - 127.0.0.1:9200:9200
     profiles:
       - search
-
   elasticvue:
     image: cars10/elasticvue:1.8.0
     restart: unless-stopped
@@ -31,7 +31,6 @@ services:
       - 127.0.0.1:8092:8080
     profiles:
       - search
-
   lila_search_app:
     image: ghcr.io/lichess-org/lila-search-app:latest
     volumes:
@@ -48,7 +47,6 @@ services:
     restart: unless-stopped
     profiles:
       - search
-
   lila_search_ingestor:
     image: ghcr.io/lichess-org/lila-search-ingestor-app:latest
     volumes:
@@ -78,7 +76,6 @@ services:
     restart: unless-stopped
     profiles:
       - search
-
   lila_search_ingestor_cli:
     image: ghcr.io/lichess-org/lila-search-ingestor-cli:latest
     volumes:
@@ -89,29 +86,22 @@ services:
       - MONGO_STUDY_URI=mongodb://mongodb:27017
       - MONGO_STUDY_DATABASE=lichess
       - ELASTIC_URI=http://elasticsearch:9200
-
       - INGESTOR_FORUM_TIME_WINDOWS=1
       - INGESTOR_FORUM_MAX_POST_LENGTH=5000
-
       - INGESTOR_TEAM_TIME_WINDOWS=1
-
       - INGESTOR_STUDY_BATCH_SIZE=100
       - INGESTOR_STUDY_INTERVAL=30
-
       - INGESTOR_GAME_BATCH_SIZE=100
       - INGESTOR_GAME_TIME_WINDOWS=2
       - INGESTOR_GAME_START_AT=0
-
       - JAVA_TOOL_OPTIONS=-Dlogback.configurationFile=/opt/config/logback.xml
       - KV_STORE_PATH=/tmp/json.store
-
     command:
-      - "index"
-      - "--all"
-      - "--since"
-      - "0"
-      - "--refresh"
-    
+      - index
+      - --all
+      - --since
+      - '0'
+      - --refresh
     profiles:
       - utils
 

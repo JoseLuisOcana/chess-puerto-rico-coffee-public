@@ -1,6 +1,8 @@
---- /tmp/FishnetPlayer.scala.upstream	2026-04-20 17:57:55.432129454 -0400
-+++ /home/devuser/projects/chess-prcs-public/lila-modifications/modules/fishnet/src/main/FishnetPlayer.scala	2026-04-20 17:58:30.245311269 -0400
-@@ -28,11 +28,11 @@
+diff --git a/modules/fishnet/src/main/FishnetPlayer.scala b/modules/fishnet/src/main/FishnetPlayer.scala
+index 4d463b4ab5..37b8d06f6a 100644
+--- a/modules/fishnet/src/main/FishnetPlayer.scala
++++ b/modules/fishnet/src/main/FishnetPlayer.scala
+@@ -28,11 +28,11 @@ final class FishnetPlayer(
          logger.info(e.getMessage)
        }
  
@@ -14,7 +16,7 @@
      else
        for
          pov <- g.aiPov
-@@ -41,7 +41,7 @@
+@@ -41,7 +41,7 @@ final class FishnetPlayer(
          if totalTime > 20 * 100
          delay = (clock.remainingTime(pov.color).centis.atMost(totalTime)) * delayFactor
          accel = 1 - ((g.ply.value - 20).atLeast(0).atMost(100)) / 150f
