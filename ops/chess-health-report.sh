@@ -20,6 +20,9 @@
 #       puzzle recycle 04:15 daily (26 h), mongodump 03:30 daily (26 h), auto-feed Mon+Thu 08:00 (4.5 days),
 #       video refresh Sun 07:00 (8 days), bgjobs cleanup Sun 04:45 (8 days)
 #   - versions of the chess stack (lila commit + local commits, lila-fishnet, lila-ws image, fishnet, mongo/redis), informational
+#   - SEARCH (added 2026-10-08 with the search-index rebuild): runs the read-only check of
+#     /usr/local/sbin/chess-search-rebuild.sh — Elasticsearch green, the auto-create guard set, all five indexes present
+#     with lila-search's real mappings and document counts equal to MongoDB, search containers running; warns per FAIL.
 #   - PREBUILT apps (added 2026-10-08, lila + lila-fishnet run from `sbt stage` builds in lila-docker/prebuilt/<app>/,
 #     not `sbt run`): warns when a container is NOT running its prebuilt start script (= sbt rollback mode, ~5 GB more
 #     RAM), when the code in repos/<repo> has commits or uncommitted edits that the current build does not contain (a
@@ -346,6 +349,19 @@ if rb or os.path.isdir("/root/prebuilt-switch-20261008"):
     out.append("sbt rollback  kept: " + ", ".join(rb + (["/root/prebuilt-switch-20261008/"] if os.path.isdir("/root/prebuilt-switch-20261008") else [])) +
                (" (until 2026-10-15)" if now < dt.datetime(2026, 10, 15, 22, 0, tzinfo=UTC) else
                 " — past 2026-10-15: delete when the owner agrees (CLAUDE.md, prebuilt section)"))
+sections.append(out)
+
+# ---------------------------------------------------------------- 5c. search (added 2026-10-08)
+out = ["SEARCH (Elasticsearch indexes vs MongoDB; fix: sudo chess-search-rebuild.sh --rebuild)"]
+try:
+    r = subprocess.run(["/usr/local/sbin/chess-search-rebuild.sh"], capture_output=True, text=True, timeout=300)
+    rows = [l for l in r.stdout.splitlines() if l.startswith(("OK ", "FAIL "))]
+except (OSError, subprocess.TimeoutExpired) as e:
+    rows = []; r = None
+for l in rows:
+    out.append((warn("search: " + l[5:].strip()[:100]) if l.startswith("FAIL") else "") + l)
+if not rows:
+    out.append(warn("search check did not run") + "search check did not run" + (f" (exit {r.returncode})" if r else ""))
 sections.append(out)
 
 # ---------------------------------------------------------------- 6. errors, last 7 days

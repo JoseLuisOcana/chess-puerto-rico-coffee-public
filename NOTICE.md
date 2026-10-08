@@ -166,6 +166,16 @@ source-disclosure requirements.
   resolve the Redis host, and its JVM stayed running with a dead main thread, so no
   WebSocket worked. lila itself is restarted too (grace 300 s) when it runs as a prebuilt app;
   under `sbt run` (slow cold compile) it is only reported, never restarted.
+- **ops/chess-search-rebuild.sh** (2026-10): checks or rebuilds the search indexes (Elasticsearch,
+  filled from MongoDB by upstream lila-search). Check mode (read-only): cluster health, all five indexes
+  present with lila-search's own mappings, document counts equal to MongoDB, the search containers running.
+  `--rebuild`: verified database dump + copy of the Elasticsearch volume first, then the upstream CLI
+  (`lila_search_ingestor_cli`) recreates the indexes and indexes everything, with the live ingestor paused
+  and a catch-up pass after it resumes. Background: lila-search's live ingestor never creates an index, so
+  Elasticsearch had auto-created `game` with guessed field types (searches counted games but listed none)
+  and the other four indexes did not exist. The cluster setting
+  `action.auto_create_index: -game,-forum,-team,-study,-ublog,+*` now makes a missing search index fail
+  loudly instead; the weekly health report runs the check.
 - **ops/chess-rebuild-lila.sh** (2026-10): rebuilds the prebuilt lila or lila-fishnet after a code
   change — builds in the one-off container while the site keeps running, copies the result to a new
   `prebuilt/<app>/builds/…` folder, switches `current`, restarts only that service, verifies it
