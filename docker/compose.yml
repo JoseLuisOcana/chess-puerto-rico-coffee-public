@@ -63,9 +63,18 @@ services:
       dockerfile: sbt.Dockerfile
     user: ${USER_ID:-}:${GROUP_ID:-}
     working_dir: /lila
-    entrypoint: ./lila.sh run
+    # 2026-10-08: runs the PREBUILT app (sbt-native-packager `stage`) instead of `./lila.sh run`, so no resident
+    # sbt server JVM (~3.7 GB). Same JVM options as the app had under sbt run (build.sbt javaOptions), same config
+    # file, same logger, same (dev) mode: play.mode is not set. Rebuild after code changes:
+    # sudo /usr/local/bin/chess-rebuild-lila.sh (CLAUDE.md "Rebuild lila").
+    # The app runs from ./prebuilt/lila/current — a COPY of sbt's stage folder, outside the repo: sbt's stage task
+    # deletes whatever it staged last time, and `sbt clean` wipes target/, so the running app must never live there.
+    # -Duser.dir=/lila: the native-packager script sets user.dir to its own folder; lila resolves public/ (asset
+    # manifest, flairs, bot data) and logs/ relative to it, so pin it to /lila exactly as under sbt run.
+    entrypoint: ["/opt/prebuilt/current/bin/lila", "-Duser.dir=/lila", "-Dconfig.file=/lila/conf/application.conf", "-Dlogger.file=/lila/conf/logger.dev.xml"]
     restart: unless-stopped
     environment:
+      - JAVA_OPTS=-Xms64m -Xmx2g --enable-native-access=ALL-UNNAMED
       - LILA_DOMAIN=${LILA_DOMAIN:-localhost:8080}
       - LILA_URL=${LILA_URL:-http://localhost:8080}
       - MOCK_EMAIL=${MOCK_EMAIL:-false}
@@ -86,6 +95,7 @@ services:
       - ./repos/scalachess:/scalachess
       - ./conf/lila.conf:/lila/conf/application.conf
       - ./conf/firebase-service-account.json:/opt/firebase-service-account.json:ro
+      - ./prebuilt/lila:/opt/prebuilt:ro
     profiles:
       - base
   caddy:
@@ -210,15 +220,49 @@ services:
       dockerfile: sbt.Dockerfile
     user: ${USER_ID:-}:${GROUP_ID:-}
     working_dir: /lila-fishnet
-    entrypoint: sbt app/run
+    # 2026-10-08: PREBUILT app (`sbt app/stage`) instead of `sbt app/run` (no resident sbt server JVM, ~1.7 GB).
+    # Runs from ./prebuilt/lila-fishnet/current, a copy outside the repo (see lila above).
+    entrypoint: ["/opt/prebuilt/current/bin/lila-fishnet"]
     environment:
       - REDIS_HOST=redis
       # - HTTP_API_LOGGER=true
     restart: unless-stopped
     volumes:
       - ./repos/lila-fishnet:/lila-fishnet
+      - ./prebuilt/lila-fishnet:/opt/prebuilt:ro
     profiles:
       - stockfish-play
+  # 2026-10-08: one-off BUILD containers for the prebuilt apps (profile "build": never started by `up`).
+  # Use: docker compose run --rm lila_build   (= ./lila.sh stage)   /   docker compose run --rm lila_fishnet_build
+  # These only write sbt's own stage folder in the repo; the running apps use ./prebuilt/<app>/current, which only
+  # /usr/local/bin/chess-rebuild-lila.sh updates (copy -> swap, previous build kept as prev -> restart -> verify).
+  # lila packages conf/ into its jar: application.conf is a secret-free placeholder here (conf/lila.build.conf);
+  # the running app reads the real conf/lila.conf through -Dconfig.file.
+  lila_build:
+    image: lila-docker-lila
+    user: ${USER_ID:-}:${GROUP_ID:-}
+    working_dir: /lila
+    entrypoint: ["./lila.sh"]
+    command: ["stage"]
+    volumes:
+      - ./repos/lila:/lila
+      - ./repos/chessground:/chessground
+      - ./repos/pgn-viewer:/pgn-viewer
+      - ./repos/bbpPairings:/opt/bbpPairings
+      - ./repos/scalachess:/scalachess
+      - ./conf/lila.build.conf:/lila/conf/application.conf:ro
+    profiles:
+      - build
+  lila_fishnet_build:
+    image: lila-docker-lila_fishnet
+    user: ${USER_ID:-}:${GROUP_ID:-}
+    working_dir: /lila-fishnet
+    entrypoint: ["sbt"]
+    command: ["app/stage"]
+    volumes:
+      - ./repos/lila-fishnet:/lila-fishnet
+    profiles:
+      - build
   fishnet_play:
     image: niklasf/fishnet:2.15.0
     restart: unless-stopped

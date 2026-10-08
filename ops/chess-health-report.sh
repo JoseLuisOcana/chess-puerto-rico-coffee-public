@@ -20,6 +20,11 @@
 #       puzzle recycle 04:15 daily (26 h), mongodump 03:30 daily (26 h), auto-feed Mon+Thu 08:00 (4.5 days),
 #       video refresh Sun 07:00 (8 days), bgjobs cleanup Sun 04:45 (8 days)
 #   - versions of the chess stack (lila commit + local commits, lila-fishnet, lila-ws image, fishnet, mongo/redis), informational
+#   - PREBUILT apps (added 2026-10-08, lila + lila-fishnet run from `sbt stage` builds in lila-docker/prebuilt/<app>/,
+#     not `sbt run`): warns when a container is NOT running its prebuilt start script (= sbt rollback mode, ~5 GB more
+#     RAM), when the code in repos/<repo> has commits or uncommitted edits that the current build does not contain (a
+#     code change does nothing until `sudo chess-rebuild-lila.sh`), and when the running process uses another build
+#     than prebuilt/<app>/current (rebuilt with --no-restart, not restarted yet).
 #   - lila-docker containers: any not running, unhealthy, or with RestartCount > 0 — except EXPECTED_STOPPED below:
 #     elasticvue (Elasticsearch web UI) and mailpit (dev mail catcher; real mail goes through IONOS) are dev tools in the
 #     active `search`/`email` profiles that have been stopped on purpose since 2026-09-13; they are listed, not flagged.
@@ -31,7 +36,7 @@
 #     keep their open handles and Plesk only empties those files in place, so no log lines are lost),
 #     client-side TLS aborts ("SSL_do_handshake()",
 #     "SSL_read()" or "SSL_write() failed"), and emerg lines about a config file outside /etc/nginx (someone running
-#     `nginx -t` on a scratch copy). Anything else at emerg/alert/crit warns.
+#     `nginx -t` on a scratch copy) or failing to open a file under /tmp/claude-* (a Claude Code test rig, 2026-10-08). Anything else at emerg/alert/crit warns.
 #   - RAM and swap: warn when available RAM < 10 % or swap > 50 % used
 #   (added 2026-10-03, second batch — owner request)
 #   - nginx: warn when nothing listens on :443 or :80 (the 2026-09-17 "inherited sockets" trap: nginx active and
@@ -195,6 +200,27 @@ for h in HOSTS:
 out.append("Renewed by Plesk in the last 7 days: " + ("; ".join(renewed) if renewed else "none"))
 sections.append(out)
 
+# prebuilt apps (2026-10-08): which start command does each container run?
+# The app runs from {PROJECT}/prebuilt/<app>/current -> builds/<time>-<commit> (chess-rebuild-lila.sh).
+PREBUILT = {"lila": ("prebuilt/lila", "bin/lila"), "lila_fishnet": ("prebuilt/lila-fishnet", "bin/lila-fishnet")}
+def container_info(svc):   # (entrypoint list, builds/<x> folder the java process runs from or "")
+    r = subprocess.run(["docker", "inspect", "-f", "{{json .Config.Entrypoint}}|{{.State.Pid}}", f"lila-docker-{svc}-1"],
+                       capture_output=True, text=True)
+    try:
+        ep, pid = r.stdout.strip().split("|", 1)
+        ep = json.loads(ep) or []
+    except ValueError:
+        return [], ""
+    try:
+        m = re.search(r"builds/[^/\x00]+", open(f"/proc/{int(pid)}/cmdline", "rb").read().decode(errors="replace"))
+    except (OSError, ValueError):
+        m = None
+    return ep, (m.group(0) if m else "")
+def runs_prebuilt(svc):
+    ep, _ = container_info(svc)
+    return any(str(x) == "/opt/prebuilt/current/" + PREBUILT[svc][1] for x in ep)
+
+
 # ---------------------------------------------------------------- 4. crons (last REAL run)
 out = ["CRON JOBS (last real run; dry-runs ignored)"]
 
@@ -238,7 +264,9 @@ end = [x for x in bl if re.search(r" (done:|SKIP:)", x)]
 if end:
     t = dt.datetime.strptime(end[-1][:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=AST)
     st = end[-1][24:].strip()
-    out.append(cron_row("bgjobs cleanup", t, st[:110], st.startswith("done:"), 8 * 24))
+    # since 2026-10-08 lila runs prebuilt (no sbt, no bg-jobs): the script's fail-safe SKIP is then the normal result
+    ok = st.startswith("done:") or (st.startswith("SKIP: no running process uses bg-jobs") and runs_prebuilt("lila"))
+    out.append(cron_row("bgjobs cleanup", t, ("not needed, lila runs prebuilt — " if ok and st.startswith("SKIP") else "") + st[:90], ok, 8 * 24))
 else:
     out.append(cron_row("bgjobs cleanup", None, "", False, 8 * 24))
 sections.append(out)
@@ -281,6 +309,43 @@ out = ["VERSIONS (chess stack; upgraded 2026-10-08, see the upgrade section of C
        f"lila-ws       {image_of('lila_ws')}",
        f"fishnet       {image_of('fishnet_play')}",
        f"mongo / redis {image_of('mongodb')} / {image_of('redis')}"]
+for svc, repo in (("lila", "lila"), ("lila_fishnet", "lila-fishnet")):
+    pdir, binp = PREBUILT[svc]
+    ep, running = container_info(svc)
+    if not runs_prebuilt(svc):
+        out.append(warn(f"{svc} is NOT running its prebuilt app (sbt rollback mode?)") +
+                   f"{svc:13} NOT prebuilt — runs {' '.join(map(str, ep))[:60] or '?'} (see CLAUDE.md 'Rebuild lila')"); continue
+    info = {}
+    try:
+        info = dict(l.strip().split("=", 1) for l in open(f"{PROJECT}/{pdir}/current/BUILD-INFO") if "=" in l)
+    except OSError:
+        pass
+    head = git_info(repo, "rev-parse", "HEAD")
+    dirty = git_info(repo, "status", "--porcelain", "--untracked-files=no")
+    dirty = 0 if dirty == "?" else len(dirty.splitlines())
+    built = iso(info["built"]) if "built" in info else None
+    row = f"{svc:13} prebuilt from {info.get('commit', '?')[:7]}, built {built.astimezone(AST):%b %d %H:%M} AST" if built else f"{svc:13} prebuilt, BUILD-INFO missing"
+    if info.get("commit") != head:
+        row = warn(f"{svc}: repos/{repo} is at {head[:7]} but the running build is {info.get('commit', '?')[:7]} — rebuild") + row + \
+              f" — repos/{repo} is at {head[:7]}: sudo chess-rebuild-lila.sh {'lila' if svc == 'lila' else 'fishnet'}"
+    elif dirty != int(info.get("dirty", "0") or 0):
+        row = warn(f"{svc}: repos/{repo} has {dirty} uncommitted edited file(s) (build had {info.get('dirty', '?')}) — rebuild?") + row + \
+              f" — {dirty} uncommitted edit(s) now vs {info.get('dirty', '?')} at build time"
+    else:
+        try:
+            cur = os.readlink(f"{PROJECT}/{pdir}/current")
+        except OSError:
+            cur = "?"
+        if running != cur:
+            row = warn(f"{svc}: runs {running or '?'} but current is {cur} (rebuilt, not restarted?)") + row + \
+                  f" — RUNS {running or '?'}, not current: cd {PROJECT} && docker compose restart {svc}"
+    out.append(row)
+rb = [i for i in ("lila-docker-lila:rollback-sbt-20261008", "lila-docker-lila_fishnet:rollback-sbt-20261008")
+      if subprocess.run(["docker", "image", "inspect", i], capture_output=True).returncode == 0]
+if rb or os.path.isdir("/root/prebuilt-switch-20261008"):
+    out.append("sbt rollback  kept: " + ", ".join(rb + (["/root/prebuilt-switch-20261008/"] if os.path.isdir("/root/prebuilt-switch-20261008") else [])) +
+               (" (until 2026-10-15)" if now < dt.datetime(2026, 10, 15, 22, 0, tzinfo=UTC) else
+                " — past 2026-10-15: delete when the owner agrees (CLAUDE.md, prebuilt section)"))
 sections.append(out)
 
 # ---------------------------------------------------------------- 6. errors, last 7 days
@@ -313,6 +378,7 @@ for l in read_all("/var/log/nginx/error.log*"):
     if lvl in ("emerg", "crit") and "(13: Permission denied)" in l and "/logs/proxy_" in l: benign_perm += 1; continue
     if lvl == "crit" and re.search(r"SSL_(do_handshake|read|write)\(\) failed", l): benign_tls += 1; continue
     if lvl == "emerg" and re.search(r" in (?!/etc/nginx/)/\S+:\d+", l): benign_test += 1; continue
+    if lvl == "emerg" and 'open() "/tmp/claude-' in l: benign_test += 1; continue   # Claude Code test rig (scratch prefix)
     counts[lvl] += 1
     if lvl != "error": other.append(re.sub(r"^\S+ \S+ ", "", l.strip())[:110])
 out = ["ERRORS (last 7 days)"]

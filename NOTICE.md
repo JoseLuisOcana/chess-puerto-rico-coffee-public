@@ -119,6 +119,20 @@ source-disclosure requirements.
 - (2026-10) **lila_push** VAPID subject changed to the site's own address
   (`docker/compose.yml`); MongoDB healthcheck script `docker/scripts/replica-set.js`
   enables mongod `quiet` mode.
+- (2026-10) **Prebuilt applications** (`docker/compose.yml`): lila and lila-fishnet no longer run
+  through `sbt run`. They are packaged with sbt-native-packager (`stage`) by two one-off build services
+  (`lila_build`, `lila_fishnet_build`, compose profile `build`), copied to `prebuilt/<app>/builds/<time>-<commit>/`
+  with `current` / `prev` symlinks, and the containers start `/opt/prebuilt/current/bin/<app>` (mounted
+  read-only). Same code, configuration file, JVM options and (dev) mode as before; the 2 GB heap from
+  `build.sbt` is now passed in `JAVA_OPTS`, because `run / javaOptions` do not reach a staged app, and
+  `-Duser.dir=/lila` keeps lila's relative paths (`public/`, `logs/`). This removes the resident sbt
+  server JVMs (~5 GB of RAM). lila's build packages `conf/` into its jar, so the build service mounts
+  the secret-free `docker/conf/lila.build.conf` as `conf/application.conf`; the running app reads the
+  real configuration through `-Dconfig.file`.
+- (2026-10) **Video library kill switch** (`docker/conf/lila.conf.example`): `video.sheet.url` points
+  at an unreachable local address. lila's video sheet sync (scheduled in prod mode, or run from the
+  admin command line) deletes every video that is not in lichess.org's spreadsheet; a failed fetch
+  stops it before anything is deleted, so this site's own curated library is never replaced.
 
 ## 3. Custom utilities
 
@@ -150,7 +164,13 @@ source-disclosure requirements.
   channel and restarts (once) a lila-ws or lila-fishnet container that never connected.
   Docker restarts all containers in parallel at boot; lila-ws once lost the race to
   resolve the Redis host, and its JVM stayed running with a dead main thread, so no
-  WebSocket worked. lila itself is only reported, never restarted.
+  WebSocket worked. lila itself is restarted too (grace 300 s) when it runs as a prebuilt app;
+  under `sbt run` (slow cold compile) it is only reported, never restarted.
+- **ops/chess-rebuild-lila.sh** (2026-10): rebuilds the prebuilt lila or lila-fishnet after a code
+  change — builds in the one-off container while the site keeps running, copies the result to a new
+  `prebuilt/<app>/builds/…` folder, switches `current`, restarts only that service, verifies it
+  (Redis subscription, homepage, one game against the computer) and switches back by itself if the new
+  build does not come up; `--rollback` and `--status` options.
 - **ops/chess-ai-game-test.py** (2026-10): end-to-end test of play against the
   computer — creates an anonymous game through the normal setup form, plays it over
   the same WebSocket a browser uses, waits for the engine's move and aborts the game.
@@ -191,7 +211,9 @@ The sign-up confirmation e-mail said "Confirm your lichess.org account":
 
 ### build.sbt (2026-10)
 
-- `javaOptions` heap of the forked application JVM: `-Xmx512m` → `-Xmx2g`.
+- `javaOptions` heap of the forked application JVM: `-Xmx512m` → `-Xmx2g`. (Since 2026-10-08 the
+  app runs prebuilt and gets the same heap from `JAVA_OPTS` in `docker/compose.yml`; this line only
+  matters for `sbt run`.)
 
 ### modules/pref/src/main/Pref.scala (2026-10)
 

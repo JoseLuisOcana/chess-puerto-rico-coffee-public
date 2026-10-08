@@ -59,7 +59,7 @@
  
  swiss.bbpairing = "/opt/bbpPairings/bbpPairings.exe"
  
-@@ -48,18 +55,36 @@
+@@ -48,18 +55,41 @@
  plan.stripe.keys.secret = "sk_test_123"
  plan.payPal.keys.public = "sb"
  
@@ -108,3 +108,8 @@
 +# can take over accounts awaiting email confirmation (GHSA-622v-64xr-xvm9). Set your own random key
 +# (e.g. `openssl rand -hex 64`), keep it private. Changing it logs everyone out once; lila-ws does not use it.
 +play.http.secret.key = "REPLACE_WITH_RANDOM_128_HEX"
++
++# 2026-10-08: VIDEO LIBRARY KILL SWITCH. lila's video sheet sync (prod mode every 6 h, or the "video sheet" admin
++# command) DELETES every video that is not in lichess.org's Google sheet (VideoSheet.fetchAll -> removeNotIn). A non-200
++# fetch aborts it before any deletion. Keep this if your site curates its own video library.
++video.sheet.url = "http://127.0.0.1:9/video-sheet-sync-disabled"

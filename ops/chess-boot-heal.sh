@@ -12,8 +12,11 @@
 #
 # Health = a Redis subscriber on the channel only that service subscribes to:
 #   lila_ws      -> site-out     restart   (normally subscribed ~6 s after start)
-#   lila_fishnet -> fishnet-out  restart   (sbt start, normally ~30 s)
-#   lila         -> site-in      REPORT ONLY — never restarted here (a cold sbt compile can take > 10 min)
+#   lila_fishnet -> fishnet-out  restart   (prebuilt app: subscribed ~2 s after start; grace 180 s)
+#   lila         -> site-in      restart   (prebuilt app: serving ~15 s after start; grace 300 s)
+# Since 2026-10-08 both run PREBUILT apps (sbt-native-packager stage, see CLAUDE.md "Rebuild lila"), so a restart is
+# cheap. If one is back on `sbt run` (rollback mode), the old rules apply automatically: lila_fishnet grace 600 s, and
+# lila REPORT ONLY — never restarted here, because a cold sbt compile can take > 10 min.
 # A container still inside its grace period is waited for, not restarted — except lila_ws whose log already shows the
 # fatal 'Exception in thread "main"' since it started. A container that is not running (stopped on purpose?) is
 # reported, never started. At most one restart per service per run.
@@ -24,7 +27,6 @@ set -u
 LOG=/var/log/chess-boot-heal.log
 DRY=0; [ "${1:-}" = "--dry-run" ] && DRY=1
 REDIS=lila-docker-redis-1
-CHECKS=${CHESS_HEAL_CHECKS:-"lila_ws:site-out:90:restart lila_fishnet:fishnet-out:600:restart lila:site-in:900:report"}
 problems=0
 
 log() { local m; m="$(date '+%F %T %Z') $*"; echo "$m"; echo "$m" >> "$LOG"; }
@@ -54,6 +56,12 @@ if [ "$(rcli PING)" != PONG ]; then
     log "FAIL redis ($REDIS) not answering PING after 5 min — nothing checked"
     exit 1
 fi
+
+# prebuilt app (2026-10-08) -> cheap restart; sbt (rollback mode) -> the old, cautious rules. Decided once Docker answers.
+prebuilt() { docker inspect -f '{{json .Config.Entrypoint}}' "lila-docker-$1-1" 2>/dev/null | grep -q '"/opt/prebuilt/current/bin/'; }
+if prebuilt lila_fishnet; then FISH="lila_fishnet:fishnet-out:180:restart"; else FISH="lila_fishnet:fishnet-out:600:restart"; fi
+if prebuilt lila; then LILA="lila:site-in:300:restart"; else LILA="lila:site-in:900:report"; fi
+CHECKS=${CHESS_HEAL_CHECKS:-"lila_ws:site-out:90:restart $FISH $LILA"}
 
 for chk in $CHECKS; do
     IFS=: read -r svc ch grace action <<< "$chk"
