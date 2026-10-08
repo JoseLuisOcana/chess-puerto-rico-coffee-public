@@ -14,6 +14,8 @@
 #   2. Our MongoDB, since the previous auto post (for the very first one: since the newest
 #      published post): finished games (imports excluded), finished arenas + swiss with >= 2
 #      players, new enabled accounts. Zero counts are left out, never shown as "0".
+#      Games listed in /etc/chess-auto-feed-exclude-games (test games played on the live site, one
+#      8-character id per line, '#' comments; missing file = none) are not counted (2026-10-08).
 #   3. The next scheduled NON-hourly arena (name + time; an hourly one is over before most
 #      readers see the post) + /training/daily. The name links to /tournament, the list page,
 #      never to the tournament itself: lila deletes an empty tournament when it ends
@@ -72,6 +74,7 @@ USER_AGENT = ("chesspuertoricocoffee.com-auto-feed/1.0 "
 BACKUP_DIR = "/var/backups/chess-auto-feed"
 KEEP_BACKUPS = 30
 KEEP_PUBLIC = 5
+EXCLUDE_FILE = "/etc/chess-auto-feed-exclude-games"  # game ids never counted (live-site test games)
 MAX_EVENTS = 2
 SPONSOR = "☕♞ Sponsored by PuertoRicoCoffeeShop.com"
 AST = ZoneInfo("America/Puerto_Rico")
@@ -98,6 +101,27 @@ def log(msg, err=False):
 def die(msg, code=1):
     log("ERROR " + msg, err=True)
     sys.exit(code)
+
+
+def read_excluded_games():
+    """Game ids the counts must skip. A missing file means none; a bad line is reported and ignored."""
+    try:
+        lines = open(EXCLUDE_FILE, encoding="utf-8").read().splitlines()
+    except FileNotFoundError:
+        return []
+    except OSError as e:
+        log(f"WARN cannot read {EXCLUDE_FILE} ({e}); counting every game", err=True)
+        return []
+    ids = []
+    for n, line in enumerate(lines, 1):
+        tok = line.split("#", 1)[0].strip()
+        if not tok:
+            continue
+        if re.fullmatch(r"[A-Za-z0-9]{8}", tok):
+            ids.append(tok)
+        else:
+            log(f"WARN {EXCLUDE_FILE} line {n} is not an 8-character game id, ignored: {tok[:40]!r}", err=True)
+    return ids
 
 
 def docker_mongo(*cmd, timeout=120):
@@ -186,14 +210,16 @@ def this_week(rounds):
 
 
 # ---------------------------------------------------------------- 2+3. Our database
-P = {"now": now.isoformat(), "postId": post_id}
+P = {"now": now.isoformat(), "postId": post_id, "excludeGames": read_excluded_games()}
 st = mongo("const P = " + json.dumps(P) + r""";
 const now = new Date(P.now);
 const lastAuto = db.daily_feed.find({_id: {$regex: "^auto-"}}).sort({at: -1}).limit(1).toArray()[0] || null;
 const newest = db.daily_feed.find({public: true, at: {$lte: now}}).sort({at: -1}).limit(1).toArray()[0] || null;
 const since = lastAuto ? lastAuto.at : (newest ? newest.at : new Date(now - 7 * 864e5));
 const win = {$gte: since, $lt: now};
-const games = db.game5.countDocuments({ca: win, s: {$gte: 30, $ne: 37}, so: {$nin: [7, 9]}});
+const gameQ = {ca: win, s: {$gte: 30, $ne: 37}, so: {$nin: [7, 9]}};
+const games = db.game5.countDocuments({...gameQ, _id: {$nin: P.excludeGames}});
+const gamesExcluded = P.excludeGames.length ? db.game5.countDocuments({...gameQ, _id: {$in: P.excludeGames}}) : 0;
 const arenas = db.tournament2.countDocuments({status: 30, startsAt: win, nbPlayers: {$gte: 2}});
 const swiss = db.swiss.countDocuments({finishedAt: win, nbPlayers: {$gte: 2}});
 const players = db.user4.countDocuments({createdAt: win, enabled: true, _id: {$ne: "lichess"},
@@ -206,7 +232,7 @@ const next =
 print("@@JSON@@" + JSON.stringify({
   since, sinceFrom: lastAuto ? "previous auto post " + lastAuto._id : (newest ? "newest post " + newest._id : "7-day default"),
   lastAuto: lastAuto && {id: lastAuto._id, content: lastAuto.content},
-  games, arenas, swiss, players,
+  games, gamesExcluded, arenas, swiss, players,
   next: next && {id: next._id, name: next.name, startsAt: next.startsAt, freq: next.schedule.freq},
   todayExists: !!db.daily_feed.findOne({_id: P.postId}),
   contents: db.daily_feed.find({}, {content: 1}).toArray().map(d => d.content),
@@ -244,7 +270,8 @@ else:
 
 since_ast = dt.datetime.fromisoformat(st["since"].replace("Z", "+00:00")).astimezone(AST)
 tours_held = st["arenas"] + st["swiss"]
-log(f"window since {st['since']} ({st['sinceFrom']}): games={st['games']} "
+log(f"window since {st['since']} ({st['sinceFrom']}): games={st['games']}"
+    + (f" (+{st['gamesExcluded']} not counted: {EXCLUDE_FILE})" if st["gamesExcluded"] else "") + " "
     f"tournaments={tours_held} (arena {st['arenas']}, swiss {st['swiss']}) new_players={st['players']}; "
     f"next={st['next'] and (st['next']['id'], st['next']['name'], st['next']['freq'], st['next']['startsAt'])}")
 

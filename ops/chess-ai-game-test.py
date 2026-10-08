@@ -10,7 +10,9 @@
 #
 # Default: wait for the AI's first move, then ABORT (status 25). Aborted games are not counted by the homepage
 # news feed (chess-auto-feed.sh counts s >= 30), so the default run leaves no trace in site statistics.
-# --moves N: also play N moves as Black (each must get an AI reply), then RESIGN — that game IS counted (s=31).
+# --moves N: also play N moves as Black (each must get an AI reply), then RESIGN (s=31, which the feed would count).
+#   Run as root, it adds that game to /etc/chess-auto-feed-exclude-games so the feed skips it; otherwise it prints
+#   the one command that does.
 # --abort GAMEID+PLAYERID (12 chars): only abort that existing game over its socket (cleanup of a broken run).
 #
 # Exit 0 = PASS, 1 = FAIL. Last line is always "AI-GAME-TEST: PASS ..." or "AI-GAME-TEST: FAIL ...".
@@ -23,6 +25,7 @@ HOST = "chesspuertoricocoffee.com"
 IP = "82.165.212.204"
 ORIGIN = "https://" + HOST
 UA = "chesspuertoricocoffee.com-selftest/1.0 (ai-game-test)"
+EXCLUDE_FILE = "/etc/chess-auto-feed-exclude-games"  # game ids chess-auto-feed.sh never counts
 PING_EVERY = 2.0  # lila's client pings ("null" -> "0") every ~2.5 s; lila_ws drops silent sockets
 
 
@@ -190,6 +193,17 @@ def end_game(ws, game_id, cmd, want):
     print(f"  sent '{cmd}' over the socket -> game status {status.get('id')} ({status.get('name')})", flush=True)
 
 
+def exclude_from_feed(game_id, moves):
+    line = f"{game_id}   # {time.strftime('%Y-%m-%d')} chess-ai-game-test.py --moves {moves}, resigned\n"
+    try:
+        with open(EXCLUDE_FILE, "a", encoding="utf-8") as f:
+            f.write(line)
+        print(f"  not counted by the news feed (added to {EXCLUDE_FILE})", flush=True)
+    except OSError:
+        print(f"  NOTE: the next news-feed post would count this resigned game. To exclude it:\n"
+              f"    echo '{game_id}' | sudo tee -a {EXCLUDE_FILE}", flush=True)
+
+
 def open_socket(ctx, game_id, player_id):
     sri = "".join(random.choices(string.ascii_letters + string.digits, k=12))
     ws = WS(ctx, f"/play/{game_id}{player_id}/v6?sri={sri}&v=0", f"rk2={player_id}")
@@ -222,6 +236,7 @@ def play(ctx, game_id, player_id, moves, ai_timeout):
                   flush=True)
         if moves:
             end_game(ws, game_id, "resign", 31)
+            exclude_from_feed(game_id, moves)
         else:
             end_game(ws, game_id, "abort", 25)
     finally:

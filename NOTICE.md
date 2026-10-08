@@ -143,7 +143,8 @@ source-disclosure requirements.
   lichess.org's public API (one request per run, identified User-Agent, no personal
   names), the site's own game/tournament/new-player counts, and the next scheduled
   tournament. It skips runs with nothing new, never deletes posts (older ones are set
-  non-public), and backs up the collection before every write.
+  non-public), and backs up the collection before every write. Game ids listed in an
+  optional local file (test games played on the live site) are left out of the counts.
 - **ops/chess-boot-heal.sh** + **ops/chess-boot-heal.service** (2026-10): after Docker
   starts, checks that lila-ws, lila-fishnet and lila each subscribed to their Redis
   channel and restarts (once) a lila-ws or lila-fishnet container that never connected.
