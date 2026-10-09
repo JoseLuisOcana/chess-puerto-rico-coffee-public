@@ -59,6 +59,21 @@ source-disclosure requirements.
   this site's own original artwork, included so the deployment source is
   complete; they are not part of upstream Lichess.
 
+- (2026-10) **Spanish and presentation polish:** the branding snippet also rewrites lila's Spanish
+  (es-ES) strings that name Lichess or ask for donations (header/menu donate links, homepage boxes and
+  about text, footer, "about" menu, news/lag pages, coach/streamer titles, Swiss help text, the scheduled
+  Swiss organiser label); the homepage boxes get puzzle and TV icons; the "Contact · About · FAQ" links are
+  separated. Text this deployment injects (sponsor bar, AGPL note, 13+ sign-up box, video strip) is
+  bilingual: both languages are in the markup and `branding.css` shows the one matching lila's
+  `<html lang>`. On phones the sponsor bar is a single line.
+- (2026-10) **Own FAQ and Spanish pages:** `/faq` is now a static page of this site
+  (`public/static/faq.html`) instead of lila's FAQ, and About, FAQ and Contact exist in Spanish at
+  `/es/about`, `/es/faq` and `/es/contact-us` (canonical + hreflang pairs, FAQPage JSON-LD).
+  `nginx/conf.d/chess-lang-map.conf` adds `?lang=es|en` (remembered in a cookie): lila has no such
+  parameter, so nginx sets the Accept-Language it forwards to lila, and the static pages pick their
+  language from the same signal (or from a browser whose first language is Spanish). The 13+ box and the
+  homepage extras also apply to lila's language-prefixed URLs (`/es/signup`, `/es`).
+
 ## 2. Configuration
 
 - **Caddyfile** (`caddy/Caddyfile`): Modified WebSocket matcher to use

@@ -53,3 +53,20 @@ body{padding-bottom:60px!important;}header#top{background:linear-gradient(135deg
    #main-wrap it must be put back on the main column explicitly. */
 #main-wrap>.lobby__about{grid-area:auto;grid-column:main;margin:0 0 1.5em}
 @media(min-width:800px){.prc-videos__grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.prc-vcard__date{left:8px;bottom:8px;font-size:.75em}.prc-vcard__body{padding:.7em .8em .8em}.prc-vcard__title{font-size:1em}.prc-vcard__channel{font-size:.85em}}
+
+/* 2026-10-08: bilingual injected text (sponsor bar, AGPL note, 13+ box): <span class="prc-en"> / <span class="prc-es">,
+   shown by the page language lila renders (<html lang="es-ES">). */
+.prc-es{display:none}
+html[lang^="es"] .prc-es{display:inline}
+html[lang^="es"] .prc-en{display:none}
+
+/* 2026-10-08: phones - the sponsor bar on ONE line (it wrapped into 3 lines and covered about a quarter of the screen);
+   the "100% free" tag is hidden below 640px. */
+@media(max-width:640px){
+#prcoffe-sponsor{flex-wrap:nowrap!important;padding:6px 10px!important;gap:8px!important}
+#prcoffe-sponsor .prc-sp-g1{gap:5px!important}
+#prcoffe-sponsor .prc-sp-i1{font-size:18px!important}
+#prcoffe-sponsor .prc-sp-label{font-size:8.5px!important;letter-spacing:1px!important;white-space:nowrap!important}
+#prcoffe-sponsor a{font-size:13px!important;letter-spacing:0!important;white-space:nowrap!important}
+#prcoffe-sponsor .prc-sp-g2{display:none!important}
+}

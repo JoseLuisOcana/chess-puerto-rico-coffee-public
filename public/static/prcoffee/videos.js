@@ -20,6 +20,9 @@
     return e;
   }
 
+  // 2026-10-08: Spanish pages (<html lang="es-…">) get Spanish labels and dates
+  var ES = /^es\b/i.test(document.documentElement.lang || '');
+
   function card(v) {
     var a = el('a', 'prc-vcard');
     a.href = '/video/' + v.id;
@@ -33,7 +36,11 @@
     img.decoding = 'async';
     thumb.appendChild(img);
     if (v.dateLabel) {
-      var date = el('time', 'prc-vcard__date', v.dateLabel);
+      var label = v.dateLabel;
+      if (ES && v.date) {
+        try { label = new Date(v.date).toLocaleDateString('es-PR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }); } catch (e) { /* keep */ }
+      }
+      var date = el('time', 'prc-vcard__date', label);
       if (v.date) date.dateTime = v.date;
       thumb.appendChild(date);
     }
@@ -56,10 +63,10 @@
     section.id = 'prc-videos';
     section.setAttribute('aria-labelledby', 'prc-videos-title');
     var head = el('div', 'prc-videos__head');
-    var h2 = el('h2', 'prc-videos__title', '🎥 Chess Videos');
+    var h2 = el('h2', 'prc-videos__title', ES ? '🎥 Videos de ajedrez' : '🎥 Chess Videos');
     h2.id = 'prc-videos-title';
     head.appendChild(h2);
-    var more = el('a', 'prc-videos__more', 'All videos »');
+    var more = el('a', 'prc-videos__more', ES ? 'Todos los videos »' : 'All videos »');
     more.href = '/video';
     head.appendChild(more);
     section.appendChild(head);
