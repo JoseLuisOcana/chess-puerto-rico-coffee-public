@@ -1,0 +1,18 @@
+diff --git a/modules/tournament/src/main/TournamentFeaturing.scala b/modules/tournament/src/main/TournamentFeaturing.scala
+index b1d397524b..d50ecf81cc 100644
+--- a/modules/tournament/src/main/TournamentFeaturing.scala
++++ b/modules/tournament/src/main/TournamentFeaturing.scala
+@@ -39,8 +39,11 @@ final class TournamentFeaturing(
+       cacheApi.unit[List[Tournament]]("tournamentFeaturing.homepage.sameForEveryone"):
+         _.refreshAfterWrite(2.seconds).buildAsyncTimeout(): _ =>
+           for
+-            started <- repo.scheduledNotHourlyStillWorthEntering
+-            created <- repo.scheduledNotHourlyCreated(Minutes(crud.CrudForm.maxHomepageHours * 60))
++            // Chess Puerto Rico Coffee: hourly arenas too, as before upstream 4c697b4 hid them; a week ahead, so our
++            // weekly event (spotlight homepageHours 168) stays on the homepage. Each tournament still waits for its
++            // own homepageSince (lichess's: 24 h at most).
++            started <- repo.scheduledStillWorthEntering
++            created <- repo.scheduledCreated(Minutes(7 * 24 * 60))
+           yield (started ::: created)
+             .sortBy(_.startsAt.toSeconds)
+             .foldLeft(List.empty[Tournament]): (acc, tour) =>

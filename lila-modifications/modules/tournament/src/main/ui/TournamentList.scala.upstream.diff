@@ -1,0 +1,42 @@
+diff --git a/modules/tournament/src/main/ui/TournamentList.scala b/modules/tournament/src/main/ui/TournamentList.scala
+index 6bce9440f8..7caccabf6b 100644
+--- a/modules/tournament/src/main/ui/TournamentList.scala
++++ b/modules/tournament/src/main/ui/TournamentList.scala
+@@ -62,17 +62,26 @@ final class TournamentList(helpers: Helpers, ui: TournamentUi)(
+                   )
+                 )
+             ),
+-            h2(trans.site.lichessTournaments()),
+-            div(cls := "scheduled")(
+-              scheduled.map: tour =>
+-                tour.schedule
+-                  .exists(_.freq != Freq.Hourly)
+-                  .option:
+-                    a(href := routes.Tournament.show(tour.id), dataIcon := ui.tournamentIcon(tour))(
+-                      strong(tour.name(full = false)),
+-                      momentFromNow(tour.startsAt)
+-                    )
+-            ),
++            {
++              // Chess Puerto Rico Coffee: "Starting soon" = the next hour, hourly arenas included (one per kind)
++              def link(tour: Tournament) =
++                a(href := routes.Tournament.show(tour.id), dataIcon := ui.tournamentIcon(tour))(
++                  strong(tour.name(full = false)),
++                  momentFromNow(tour.startsAt)
++                )
++              val (soon, later) = scheduled.partition(_.secondsToStart.value < 3600)
++              val soonOnePerKind = soon
++                .foldLeft(List.empty[Tournament]): (acc, t) =>
++                  if acc.exists(_.similarSchedule(t)) then acc else t :: acc
++                .reverse
++              frag(
++                soonOnePerKind.nonEmpty.option(
++                  frag(h2(trans.swiss.startingSoon()), div(cls := "scheduled")(soonOnePerKind.map(link)))
++                ),
++                h2(trans.site.lichessTournaments()),
++                div(cls := "scheduled")(later.filterNot(_.scheduleFreq.has(Freq.Hourly)).map(link))
++              )
++            },
+             a(cls := "button button-empty", href := routes.Tournament.calendar)(trans.site.more(), " »")
+           ),
+           st.section(cls := "tour-home__schedule box")(

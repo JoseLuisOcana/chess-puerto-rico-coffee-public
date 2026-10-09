@@ -1,0 +1,28 @@
+diff --git a/modules/tournament/src/main/TournamentRepo.scala b/modules/tournament/src/main/TournamentRepo.scala
+index 87b11ceaeb..fcd9ee345c 100644
+--- a/modules/tournament/src/main/TournamentRepo.scala
++++ b/modules/tournament/src/main/TournamentRepo.scala
+@@ -248,6 +248,10 @@ final class TournamentRepo(val coll: Coll, playerCollName: CollName)(using Execu
+       .map:
+         _.filter(_.isStillWorthEntering)
+ 
++  // Chess Puerto Rico Coffee: the homepage keeps hourly arenas
++  private[tournament] def scheduledStillWorthEntering: Fu[List[Tournament]] =
++    coll.list[Tournament](startedSelect ++ scheduledSelect).map(_.filter(_.isStillWorthEntering))
++
+   def uniques(max: Int): Fu[List[Tournament]] =
+     coll
+       .find(selectUnique)
+@@ -266,8 +270,11 @@ final class TournamentRepo(val coll: Coll, playerCollName: CollName)(using Execu
+   def allScheduledDedup: Fu[List[Tournament]] =
+     coll
+       .find(
+-        createdSelect ++ scheduledButNotHourly ++ bdoc(
++        createdSelect ++ scheduledSelect ++ bdoc(
+           "startsAt".lt(nowInstant.plusDays(21))
++        ) ++ or( // Chess Puerto Rico Coffee: hourly arenas of the next hour, for "Starting soon"
++          bdoc("schedule.freq".neq(Schedule.Freq.Hourly)),
++          bdoc("startsAt".lt(nowInstant.plusHours(1)))
+         )
+       )
+       .sort(bdoc("startsAt" -> 1))

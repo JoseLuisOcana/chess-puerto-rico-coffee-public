@@ -70,3 +70,11 @@ html[lang^="es"] .prc-en{display:none}
 #prcoffe-sponsor a{font-size:13px!important;letter-spacing:0!important;white-space:nowrap!important}
 #prcoffe-sponsor .prc-sp-g2{display:none!important}
 }
+
+/* 2026-10-09: phones - show the start / remaining time in the homepage "Open tournaments" box. Upstream lila hides
+   it below 650px (.lobby .lobby__tournaments-simuls .timeago{display:none}); a bit smaller so "52 minutos
+   restantes" fits the 23ch bar at 360px. */
+@media(max-width:649.29px){
+.lobby .lobby__tournaments-simuls .lobby__tournaments .timeago{display:inline}
+.lobby .lobby__tournaments-simuls .lobby__tournaments .progress__text{font-size:.8em;inset-inline-start:.7ch;left:.7ch}
+}

@@ -1,0 +1,73 @@
+diff --git a/modules/tournament/src/main/TournamentScheduler.scala b/modules/tournament/src/main/TournamentScheduler.scala
+index 12406783cb..42dcc14396 100644
+--- a/modules/tournament/src/main/TournamentScheduler.scala
++++ b/modules/tournament/src/main/TournamentScheduler.scala
+@@ -2,6 +2,7 @@ package lila.tournament
+ 
+ import chess.StartingPosition
+ import chess.IntRating
++import chess.Clock.{ IncrementSeconds, LimitSeconds }
+ 
+ import java.time.DayOfWeek.*
+ import java.time.Month.*
+@@ -24,7 +25,14 @@ final private class TournamentScheduler(tournamentRepo: TournamentRepo)(using
+       try
+         val newPlans = TournamentScheduler.allWithConflicts()
+         val tourneysToAdd = PlanBuilder.getNewTourneys(dbScheds, newPlans)
+-        tournamentRepo.insert(tourneysToAdd).logFailure(logger)
++        // Chess Puerto Rico Coffee: our own events are added unless one with the same name and start exists.
++        // They skip lichess's conflict pruning, which would drop them for its own same-speed dailies.
++        val puertoRicoToAdd = TournamentScheduler
++          .puertoRico()
++          .map(_.build)
++          .filterNot: tour =>
++            dbScheds.exists(t => t.name == tour.name && t.startsAt == tour.startsAt)
++        tournamentRepo.insert(tourneysToAdd ::: puertoRicoToAdd).logFailure(logger)
+       catch
+         case e: Exception =>
+           logger.error(s"failed to schedule all: ${e.getMessage}")
+@@ -479,6 +487,44 @@ Thank you all, you rock!""".some,
+       yield schedule.plan
+     ).flatten.filter(_.schedule.at.isAfter(rightNow))
+ 
++  /* Chess Puerto Rico Coffee: the site's own recurring arenas. Times are UTC; Puerto Rico (AST) is UTC-4 all
++   * year (no DST): 23:00 UTC = 7 PM AST, Saturday 19:00 UTC = 3 PM AST. Unique, because only Unique and
++   * Marathon tournaments keep their own name; the spotlight shows each on the homepage before it starts (the
++   * daily for 24 hours, the weekly all week). No entry conditions (conditionFor gives Unique none). */
++  def puertoRico(rightNow: LocalDateTime = nowDateTime): List[Plan] =
++    val today = rightNow.date
++    def orLater(date: LocalDateTime, step: LocalDateTime => LocalDateTime) =
++      if date.isBefore(rightNow) then step(date) else date
++    val saturday = today.adjust(TemporalAdjusters.nextOrSame(SATURDAY))
++    List(
++      Schedule(Unique, Blitz, Standard, none, orLater(at(today, 23), _.plusDays(1))).plan:
++        _.copy(
++          name = "Puerto Rico Blitz",
++          clock = chess.Clock.Config(LimitSeconds(5 * 60), IncrementSeconds(3)),
++          minutes = 60,
++          description = ("Puerto Rico's daily blitz arena: 5+3, one hour, every evening at 7:00 PM (AST). " +
++            "Everyone is welcome!\n\nLa arena diaria de blitz de Puerto Rico: 5+3, una hora, todas las " +
++            "noches a las 7:00 p.m. (AST). ¡Todos son bienvenidos!").some,
++          spotlight = Spotlight(
++            headline = "Every evening 7 PM · Todas las noches 7 p.m.",
++            homepageHours = 24.some
++          ).some
++        ),
++      Schedule(Unique, Rapid, Standard, none, orLater(at(saturday, 19), _.plusWeeks(1))).plan:
++        _.copy(
++          name = "Puerto Rico Chess Federation Rapid",
++          clock = chess.Clock.Config(LimitSeconds(10 * 60), IncrementSeconds(5)),
++          minutes = 120,
++          description = ("Weekly rapid arena for Puerto Rico's chess community: 10+5, two hours, every " +
++            "Saturday at 3:00 PM (AST).\n\nArena semanal de ajedrez rápido para la comunidad ajedrecística " +
++            "de Puerto Rico: 10+5, dos horas, todos los sábados a las 3:00 p.m. (AST).").some,
++          spotlight = Spotlight(
++            headline = "Saturdays 3 PM · Sábados 3 p.m.",
++            homepageHours = (7 * 24).some // all week (TournamentFeaturing looks 7 days ahead)
++          ).some
++        )
++    )
++
+   private def atTopOfHour(rightNow: LocalDateTime, hourDelta: Int): LocalDateTime =
+     val withHours = rightNow.plusHours(hourDelta)
+     LocalDateTime.of(withHours.date, LocalTime.of(withHours.getHour, 0))

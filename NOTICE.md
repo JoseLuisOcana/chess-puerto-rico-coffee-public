@@ -66,6 +66,9 @@ source-disclosure requirements.
   separated. Text this deployment injects (sponsor bar, AGPL note, 13+ sign-up box, video strip) is
   bilingual: both languages are in the markup and `branding.css` shows the one matching lila's
   `<html lang>`. On phones the sponsor bar is a single line.
+- (2026-10) **Tournament times on phones:** upstream hides the start / remaining time of each row of the
+  homepage "Open tournaments" box below 650px; `branding.css` shows it again, slightly smaller. (The
+  tournament changes themselves are lila source changes, section 5.)
 - (2026-10) **Own FAQ and Spanish pages:** `/faq` is now a static page of this site
   (`public/static/faq.html`) instead of lila's FAQ, and About, FAQ and Contact exist in Spanish at
   `/es/about`, `/es/faq` and `/es/contact-us` (canonical + hreflang pairs, FAQPage JSON-LD).
@@ -268,9 +271,29 @@ The sign-up confirmation e-mail said "Confirm your lichess.org account":
   assessment, so on a deployment without Lichess's AI moderation an approved post stayed hidden forever.
   Unrated posts stay out of the lists and search (manual approval); AI-assessed posts behave as upstream.
 
+### modules/tournament (2026-10): `TournamentFeaturing.scala`, `TournamentRepo.scala`, `ui/TournamentList.scala`, `Schedule.scala`, `TournamentScheduler.scala`
+
+Scheduled tournaments for a small site:
+
+- Homepage "Open tournaments": hourly arenas are listed again. Upstream stopped showing them there in 2026
+  (lila commit 4c697b4, "don't show hourly tournaments on homepage"); on this site the next non-hourly event is
+  often hours away, so the box was empty most of the day. The homepage also looks 7 days ahead instead of 24 h,
+  so a weekly event with a longer spotlight can stay on it all week; every other tournament still waits for its
+  own homepage window (24 h at most).
+- `/tournament`: a "Starting soon" block above the scheduled list (the next hour, hourly arenas included, one per
+  kind; label from lila's own `swiss:startingSoon` translation).
+- Scheduled arenas no longer require 5-30 rated games of their speed (`Schedule.conditionFor`): on a small
+  site most members have none, so every scheduled arena was closed to them. The rating-limited hourlies
+  ("≤1500 Blitz", …) keep their requirement, and the weekend "Elite" arenas their minimum rating.
+- Two recurring arenas of this site, created by the same scheduler (as `Unique` tournaments, the only kind that
+  keeps its own name, with a homepage spotlight): "Puerto Rico Blitz", daily 7 PM AST (23:00 UTC), 5+3, 60
+  minutes; "Puerto Rico Chess Federation Rapid", Saturdays 3 PM AST (19:00 UTC), 10+5, 120 minutes. They are not
+  subject to lichess's conflict pruning (which would cancel them for its own same-speed dailies) and are never
+  created twice (same name and start).
+
 Each file is in `lila-modifications/` with an `.upstream.diff` generated with
 `git diff` against the deployed upstream lila commit (`f5b261e`, deployed 2026-10-08;
-previously `f9e0e4c`). These five files carry the only source changes.
+previously `f9e0e4c`). These ten files carry the only source changes.
 
 ## Upstream versions
 

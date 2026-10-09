@@ -1,0 +1,32 @@
+diff --git a/modules/tournament/src/main/Schedule.scala b/modules/tournament/src/main/Schedule.scala
+index b01338288c..f1f0845f3b 100644
+--- a/modules/tournament/src/main/Schedule.scala
++++ b/modules/tournament/src/main/Schedule.scala
+@@ -226,22 +226,12 @@ object Schedule:
+   private[tournament] def conditionFor(s: Schedule) =
+     if s.conditions.nonEmpty then s.conditions
+     else
+-      import Freq.*, Speed.*
++      import Freq.*
+ 
+-      val nbRatedGame = ((s.freq, s.variant, s.speed) match
+-        case (Hourly, variant, _) if variant.exotic => 0
+-
+-        case (Hourly | Daily | Eastern, _, HyperBullet | Bullet) => 20
+-        case (Hourly | Daily | Eastern, _, HippoBullet | SuperBlitz | Blitz | ChillBlitz) => 15
+-        case (Hourly | Daily | Eastern, _, Rapid) => 10
+-
+-        case (Weekly | Weekend | Monthly | Shield, _, HyperBullet | Bullet) => 30
+-        case (Weekly | Weekend | Monthly | Shield, _, HippoBullet | SuperBlitz | Blitz | ChillBlitz) => 20
+-        case (Weekly | Weekend | Monthly | Shield, _, Rapid) => 15
+-        case (Weekly | Weekend | Monthly | Shield, _, Classical) => 5
+-
+-        case _ => 0
+-      ).some.filter(0 <).map(Condition.NbRatedGame.apply)
++      // Chess Puerto Rico Coffee: no rated-games entry requirement (lichess asks 5-30 rated games of the
++      // speed). On a small site most members have none, so every scheduled arena would be closed to them.
++      // The rating-limited hourlies keep theirs (set in TournamentScheduler), as they need a real rating.
++      val nbRatedGame = none[Condition.NbRatedGame]
+ 
+       val minRating = ((s.freq, s.variant) match
+         case (Weekend, chess.variant.Crazyhouse) => 2100
