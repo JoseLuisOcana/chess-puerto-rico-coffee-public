@@ -201,6 +201,10 @@ source-disclosure requirements.
   blog-post ingestor, so every 10 minutes this runs the upstream CLI for the blog index (all live posts; posts
   rated spam or no longer live are removed) and deletes index entries of posts that were deleted. Blog search
   only shows posts a moderator approved (see section 5, `UblogPost.scala`).
+- **ops/chess-presentation-rollback.sh** (2026-10): undoes the October 2026 Spanish/FAQ polish in one
+  command — restores the nine files changed that day from the backup taken first, moves the new pages
+  (`faq.html`, `es/`) aside instead of deleting them, `nginx -t`, then a graceful reload; if `nginx -t` fails
+  it puts everything back and does not reload. `--dry-run` shows what it would change.
 - **ops/chess-rebuild-lila.sh** (2026-10): rebuilds the prebuilt lila or lila-fishnet after a code
   change — builds in the one-off container while the site keeps running, copies the result to a new
   `prebuilt/<app>/builds/…` folder, switches `current`, restarts only that service, verifies it
