@@ -20,6 +20,9 @@
 #       puzzle recycle 04:15 daily (26 h), mongodump 03:30 daily (26 h), auto-feed Mon+Thu 08:00 (4.5 days),
 #       video refresh Sun 07:00 (8 days), bgjobs cleanup Sun 04:45 (8 days)
 #   - versions of the chess stack (lila commit + local commits, lila-fishnet, lila-ws image, fishnet, mongo/redis), informational
+#   - BLOG APPROVAL (added 2026-10-08): lists published blog posts nobody has rated yet. They stay out of the community
+#     list and blog search until a moderator clicks Weak or Good on the post page (Spam = reject). Each
+#     waiting post is an attention item, with its link.
 #   - SEARCH (added 2026-10-08 with the search-index rebuild): runs the read-only check of
 #     /usr/local/sbin/chess-search-rebuild.sh — Elasticsearch green, the auto-create guard set, all five indexes present
 #     with lila-search's real mappings and document counts equal to MongoDB, search containers running; warns per FAIL.
@@ -362,6 +365,25 @@ for l in rows:
     out.append((warn("search: " + l[5:].strip()[:100]) if l.startswith("FAIL") else "") + l)
 if not rows:
     out.append(warn("search check did not run") + "search check did not run" + (f" (exit {r.returncode})" if r else ""))
+sections.append(out)
+
+# ---------------------------------------------------------------- 5d. blog posts awaiting approval (added 2026-10-08)
+out = ["BLOG POSTS AWAITING APPROVAL (open the link as a moderator, click Good or Weak to publish, Spam to reject)"]
+r = subprocess.run(["docker", "exec", "lila-docker-mongodb-1", "mongosh", "--quiet", "lichess", "--eval",
+                    'print(JSON.stringify(db.ublog_post.find({live:true, "automod.quality":{$exists:false}},'
+                    '{title:1, "created.by":1, "lived.at":1}).sort({"lived.at":1}).toArray()))'], capture_output=True, text=True)
+try:
+    waiting = json.loads(r.stdout.strip().splitlines()[-1])
+except (ValueError, IndexError):
+    waiting = None
+if waiting is None:
+    out.append(warn("blog approval check failed") + "could not read the blog posts")
+elif not waiting:
+    out.append("none waiting")
+for w in waiting or []:
+    out.append(warn(f"blog post awaits approval: {w.get('title', '?')[:50]}") +
+               f"{str(w.get('lived', {}).get('at', '?'))[:10]}  {w.get('title', '?')[:50]} by {w.get('created', {}).get('by', '?')}"
+               f" -> https://chesspuertoricocoffee.com/ublog/{w['_id']}/redirect")
 sections.append(out)
 
 # ---------------------------------------------------------------- 6. errors, last 7 days

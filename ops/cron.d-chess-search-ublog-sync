@@ -1,0 +1,7 @@
+# chess-search-ublog-sync (2026-10-08): lila-search >= 3.5 has no live blog ingestor; this keeps the blog search index
+# current (approved posts searchable within ~10 min). One line per run in /var/log/chess-search-ublog-sync.log; the weekly
+# health report and `sudo chess-search-rebuild.sh` flag a FAIL or a stale log. Script: /usr/local/sbin/chess-search-ublog-sync.sh
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=""
+*/10 * * * * root /usr/local/sbin/chess-search-ublog-sync.sh >/dev/null 2>&1

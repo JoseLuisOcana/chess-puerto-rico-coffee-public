@@ -1,0 +1,14 @@
+diff --git a/modules/ublog/src/main/UblogPost.scala b/modules/ublog/src/main/UblogPost.scala
+index e0cf6fc121..e0d9fc6f35 100644
+--- a/modules/ublog/src/main/UblogPost.scala
++++ b/modules/ublog/src/main/UblogPost.scala
+@@ -51,6 +51,9 @@ case class UblogPost(
+     def hasTags = d.evergreen.isDefined
+     val base = automod.getOrElse(UblogAutomod.Assessment(quality = Quality.spam))
+     val assessment = base.copy(
++      // Chess Puerto Rico Coffee: no AI moderation runs on this site. For a post the AI never assessed (no hash), the
++      // moderator's rating is also its assessment - the field the community lists and blog search filter on.
++      quality = if base.hash.isEmpty then d.quality | base.quality else base.quality,
+       evergreen = d.evergreen.orElse(base.evergreen),
+       flagged = if hasTags then d.flagged else base.flagged,
+       commercial = if hasTags then d.commercial else base.commercial

@@ -129,6 +129,12 @@ source-disclosure requirements.
   server JVMs (~5 GB of RAM). lila's build packages `conf/` into its jar, so the build service mounts
   the secret-free `docker/conf/lila.build.conf` as `conf/application.conf`; the running app reads the
   real configuration through `-Dconfig.file`.
+- (2026-10) **lila-search 3.6.0** (`docker/compose-search.yml`): the search app, ingestor and CLI images are
+  pinned to version 3.6.0 by digest (the version of lila's search client) instead of `latest`. Two deployment
+  notes: lila-search >= 3.5 refuses to start when the user collection holds no account titled BOT, so this
+  site keeps one closed placeholder account (`SearchBotGuard`, disabled, no e-mail or password); and the
+  ingestor's study watcher, started without a saved position, polls time windows that start "now" and never
+  index anything, so `INGESTOR_STUDY_START_AT` is pinned.
 - (2026-10) **Video library kill switch** (`docker/conf/lila.conf.example`): `video.sheet.url` points
   at an unreachable local address. lila's video sheet sync (scheduled in prod mode, or run from the
   admin command line) deletes every video that is not in lichess.org's spreadsheet; a failed fetch
@@ -176,6 +182,10 @@ source-disclosure requirements.
   and the other four indexes did not exist. The cluster setting
   `action.auto_create_index: -game,-forum,-team,-study,-ublog,+*` now makes a missing search index fail
   loudly instead; the weekly health report runs the check.
+- **ops/chess-search-ublog-sync.sh** + cron + logrotate (2026-10): lila-search >= 3.5 no longer runs a live
+  blog-post ingestor, so every 10 minutes this runs the upstream CLI for the blog index (all live posts; posts
+  rated spam or no longer live are removed) and deletes index entries of posts that were deleted. Blog search
+  only shows posts a moderator approved (see section 5, `UblogPost.scala`).
 - **ops/chess-rebuild-lila.sh** (2026-10): rebuilds the prebuilt lila or lila-fishnet after a code
   change — builds in the one-off container while the site keeps running, copies the result to a new
   `prebuilt/<app>/builds/…` folder, switches `current`, restarts only that service, verifies it
@@ -231,9 +241,17 @@ The sign-up confirmation e-mail said "Confirm your lichess.org account":
   Upstream changed this default from dark to "follow the device theme" in 2026; this site's
   branding is designed for the dark theme. Account holders keep upstream's default.
 
+### modules/ublog/src/main/UblogPost.scala (2026-10)
+
+- A moderator's blog-post rating (the Spam / Weak / Good buttons) also becomes the post's assessment when no
+  AI moderation ever assessed the post (the assessment has no content hash). Upstream keeps the AI assessment
+  and creates a "spam" one when there is none; the community blog lists and blog search filter on that
+  assessment, so on a deployment without Lichess's AI moderation an approved post stayed hidden forever.
+  Unrated posts stay out of the lists and search (manual approval); AI-assessed posts behave as upstream.
+
 Each file is in `lila-modifications/` with an `.upstream.diff` generated with
 `git diff` against the deployed upstream lila commit (`f5b261e`, deployed 2026-10-08;
-previously `f9e0e4c`). The same four files carry the only source changes.
+previously `f9e0e4c`). These five files carry the only source changes.
 
 ## Upstream versions
 

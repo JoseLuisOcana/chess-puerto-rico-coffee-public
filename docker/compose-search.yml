@@ -32,7 +32,9 @@ services:
     profiles:
       - search
   lila_search_app:
-    image: ghcr.io/lichess-org/lila-search-app:latest
+    # 2026-10-08: pinned to lila-search 3.6.0 (= the search client our lila uses). Was :latest = 3.4.3, whose
+    # ingestor never saw a blog post's rating/date. Bump deliberately; then `sudo chess-search-rebuild.sh --rebuild`.
+    image: ghcr.io/lichess-org/lila-search-app:3.6.0@sha256:1d4ab5729b5c0b9a0bfefc4bcf98e63077c14f62bffdc1bc564e397954a3d3de
     volumes:
       - ./conf/lila-search-logback.xml:/opt/config/logback.xml
     environment:
@@ -48,7 +50,9 @@ services:
     profiles:
       - search
   lila_search_ingestor:
-    image: ghcr.io/lichess-org/lila-search-ingestor-app:latest
+    # 2026-10-08: pinned to lila-search 3.6.0 (= the search client our lila uses). Was :latest = 3.4.3, whose
+    # ingestor never saw a blog post's rating/date. Bump deliberately; then `sudo chess-search-rebuild.sh --rebuild`.
+    image: ghcr.io/lichess-org/lila-search-ingestor-app:3.6.0@sha256:9b19cbfafdc615554e43e9f7c7d92b72ff3150517b0657d06c70de65ab720cc4
     volumes:
       - ./conf/lila-search-logback.xml:/opt/config/logback.xml
     environment:
@@ -64,6 +68,10 @@ services:
       - INGESTOR_TEAM_TIME_WINDOWS=1
       - INGESTOR_STUDY_BATCH_SIZE=100
       - INGESTOR_STUDY_INTERVAL=30
+      # 2026-10-08: the study watcher polls 30-s windows. Started WITHOUT a saved position (a freshly created container:
+      # the position store is /tmp inside it) it queries [now, now+30 s] at "now" - always empty, forever (upstream bug,
+      # 3.4.3 and 3.6.0). A fixed start makes every start re-check studies changed since then, then poll correctly.
+      - INGESTOR_STUDY_START_AT=1791504000
       - INGESTOR_GAME_BATCH_SIZE=100
       - INGESTOR_GAME_TIME_WINDOWS=2
       # 2026-10-02: INGESTOR_GAME_START_AT=0 removed here (kept for the one-off _cli service below). It
@@ -77,7 +85,9 @@ services:
     profiles:
       - search
   lila_search_ingestor_cli:
-    image: ghcr.io/lichess-org/lila-search-ingestor-cli:latest
+    # 2026-10-08: pinned to lila-search 3.6.0 (= the search client our lila uses). Was :latest = 3.4.3, whose
+    # ingestor never saw a blog post's rating/date. Bump deliberately; then `sudo chess-search-rebuild.sh --rebuild`.
+    image: ghcr.io/lichess-org/lila-search-ingestor-cli:3.6.0@sha256:e73c02ef6ea8258159b7e62073f77bd4bb0404fc8f37e1961c026f4a3a1ece81
     volumes:
       - ./conf/lila-search-logback.xml:/opt/config/logback.xml
     environment:

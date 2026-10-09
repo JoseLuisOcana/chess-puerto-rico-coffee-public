@@ -23,26 +23,31 @@
 #     sudo tar -C "$V" -xzf /root/search-backups/<time>/es_data-volume.tar.gz
 #     sudo docker compose start elasticsearch && sleep 30 && sudo docker compose start lila_search_app lila_search_ingestor
 # Log: /var/log/chess-search-rebuild.log
+# Staging / tests: CHESS_PROJECT=<lila-docker folder> CHESS_PREFIX=<compose project, e.g. lilastaging> (then no live dump,
+#   backups in /root/search-backups-<prefix>/, log in <folder>/../chess-search-rebuild.log).
 set -uo pipefail
-PROJECT=/opt/chess/lila-docker; LOG=/var/log/chess-search-rebuild.log
+PROJECT=${CHESS_PROJECT:-/opt/chess/lila-docker}; PREFIX=${CHESS_PREFIX:-lila-docker}; export PREFIX
+if [ "$PREFIX" = lila-docker ]; then LOG=/var/log/chess-search-rebuild.log; BK=/root/search-backups
+else LOG=$PROJECT/../chess-search-rebuild.log; BK=/root/search-backups-$PREFIX; fi
 INDEXES="game forum team ublog study_with_chapters"
 GUARD="-game,-forum,-team,-study,-ublog,+*"
 MODE=check; [ "${1:-}" = --rebuild ] && MODE=rebuild
 [ $# -gt 0 ] && [ "$MODE" = check ] && { echo "usage: $0 [--rebuild]"; exit 2; }
 [ "$(id -u)" = 0 ] || { echo "run as root (sudo)"; exit 1; }
 log() { echo "$(date -u +%FT%TZ) $*" | tee -a "$LOG"; }
-es() { docker exec lila-docker-elasticsearch-1 curl -s "$@"; }
+es() { docker exec "$PREFIX-elasticsearch-1" curl -s "$@"; }
 cd "$PROJECT" || exit 1
 
 check() {   # prints one line per check; exit status = number of problems (0 = all good)
   python3 -I - <<'PY'
-import json, subprocess, sys
+import json, os, subprocess, sys
+P = os.environ["PREFIX"]
 def es(path):
-    r = subprocess.run(["docker", "exec", "lila-docker-elasticsearch-1", "curl", "-s", "localhost:9200" + path], capture_output=True, text=True)
+    r = subprocess.run(["docker", "exec", f"{P}-elasticsearch-1", "curl", "-s", "localhost:9200" + path], capture_output=True, text=True)
     try: return json.loads(r.stdout)
     except ValueError: return {}
 def mongo(js):
-    r = subprocess.run(["docker", "exec", "lila-docker-mongodb-1", "mongosh", "--quiet", "lichess", "--eval", js], capture_output=True, text=True)
+    r = subprocess.run(["docker", "exec", f"{P}-mongodb-1", "mongosh", "--quiet", "lichess", "--eval", js], capture_output=True, text=True)
     return r.stdout.strip().split()[-1] if r.stdout.strip() else "?"
 bad = 0
 def line(ok, msg):
@@ -71,7 +76,19 @@ for i, w in want.items():
     except ValueError: w = -1
     lag = abs(n - w) <= max(10, w // 100)   # the ingestor lags a little; these indexes refresh every 300 s by design
     line(real and lag and w >= 0, f"{i:20} {n} docs, MongoDB {w}" + ("" if real else " — WRONG MAPPING (auto-created?)") + ("" if lag else " — COUNT MISMATCH"))
-for c in ("lila-docker-lila_search_app-1", "lila-docker-lila_search_ingestor-1"):
+bots = mongo('print(db.user4.countDocuments({title:"BOT"}))')
+line(bots not in ("0", "?"), f"BOT-titled account(s): {bots} (lila-search >= 3.5 will not start without one; placeholder 'searchbotguard')")
+import time, re as _re
+slog = "/var/log/chess-search-ublog-sync.log" if P == "lila-docker" else os.environ.get("SYNC_LOG", "")
+if slog:
+    try:
+        last = open(slog).read().strip().splitlines()[-1]
+        t = time.mktime(time.strptime(last[:20], "%Y-%m-%dT%H:%M:%SZ")) - time.timezone
+        fresh = time.time() - t < 1800
+        line(fresh and " OK " in last, f"blog sync (every 10 min): {last[:150]}" + ("" if fresh else " — STALE"))
+    except (OSError, IndexError, ValueError):
+        line(False, f"blog sync: no log {slog}")
+for c in (f"{P}-lila_search_app-1", f"{P}-lila_search_ingestor-1"):
     st = subprocess.run(["docker", "inspect", "-f", "{{.State.Status}}", c], capture_output=True, text=True).stdout.strip()
     line(st == "running", f"{c} {st or 'missing'}")
 sys.exit(bad)
@@ -80,18 +97,22 @@ PY
 
 if [ "$MODE" = check ]; then check; r=$?; echo "SEARCH-CHECK: $([ $r = 0 ] && echo 'ALL OK' || echo "$r PROBLEM(S)")"; exit $r; fi
 
-exec 9>/run/lock/chess-search-rebuild.lock; flock -n 9 || { echo "another rebuild is running"; exit 1; }
-B=/root/search-backups/$(date -u +%Y%m%dT%H%M%SZ); mkdir -p "$B"; chmod 700 /root/search-backups "$B"
+exec 9>"/run/lock/chess-search-$PREFIX.lock"; flock -w 900 9 || { echo "another rebuild or the blog sync is running"; exit 1; }
+B=$BK/$(date -u +%Y%m%dT%H%M%SZ); mkdir -p "$B"; chmod 700 "$BK" "$B"
 log "REBUILD start; backup -> $B"
-/usr/local/bin/chess-mongodump.sh || { log "FAIL mongodump"; exit 1; }
-tail -1 /var/log/chess-mongodump.log | grep -q ' OK .*verified=yes' || { log "FAIL mongodump not verified"; exit 1; }
-tail -1 /var/log/chess-mongodump.log >> "$B/mongodump.txt"
+if [ "$PREFIX" = lila-docker ]; then
+  /usr/local/bin/chess-mongodump.sh || { log "FAIL mongodump"; exit 1; }
+  tail -1 /var/log/chess-mongodump.log | grep -q ' OK .*verified=yes' || { log "FAIL mongodump not verified"; exit 1; }
+  tail -1 /var/log/chess-mongodump.log >> "$B/mongodump.txt"
+else log "($PREFIX: no live database dump)"; fi
 es 'localhost:9200/_cat/indices?v' > "$B/cat-indices.txt"; es 'localhost:9200/_cluster/settings' > "$B/cluster-settings.json"
 es 'localhost:9200/_all/_settings' > "$B/index-settings.json"; es 'localhost:9200/_all/_mapping' > "$B/index-mappings.json"
 es -XPOST 'localhost:9200/_flush' > /dev/null
-tar -C "$(docker volume inspect -f '{{.Mountpoint}}' lila-docker_es_data)" -czf "$B/es_data-volume.tar.gz" . || { log "FAIL volume copy"; exit 1; }
+VOL=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/usr/share/elasticsearch/data"}}{{.Name}}{{end}}{{end}}' "$PREFIX-elasticsearch-1")
+[ -n "$VOL" ] || { log "FAIL cannot find the Elasticsearch data volume"; exit 1; }
+tar -C "$(docker volume inspect -f '{{.Mountpoint}}' "$VOL")" -czf "$B/es_data-volume.tar.gz" . || { log "FAIL volume copy"; exit 1; }
 log "backup OK: $(du -sh "$B" | cut -f1)"
-ls -1d /root/search-backups/*/ | head -n -3 | while read -r d; do rm -rf -- "$d"; log "removed old backup $d"; done
+ls -1d "$BK"/*/ | head -n -3 | while read -r d; do rm -rf -- "$d"; log "removed old backup $d"; done
 
 es -XPUT 'localhost:9200/_cluster/settings' -H 'Content-Type: application/json' \
    -d "{\"persistent\":{\"action.auto_create_index\":\"$GUARD\"}}" > /dev/null

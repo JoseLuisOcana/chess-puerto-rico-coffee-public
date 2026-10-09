@@ -1,0 +1,10 @@
+# 2026-10-08: chess search maintenance logs (blog sync writes one line every 10 minutes)
+/var/log/chess-search-ublog-sync.log /var/log/chess-search-rebuild.log {
+    weekly
+    rotate 8
+    compress
+    delaycompress
+    missingok
+    notifempty
+    su root syslog
+}
