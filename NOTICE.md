@@ -49,6 +49,9 @@ source-disclosure requirements.
   config-backup repo, pending security updates and updates skipped over edited config files, that Plesk's
   own nginx package stays uninstalled (apt pin), Let's Encrypt renewal errors and renewed-but-unserved
   certificates; `--label` marks an extra run, and it stays silent under cron when the mail was sent.
+  Since 2026-10-20, container restarts that line up with a Docker/containerd package update (apt history /
+  dpkg log) are listed as "restarted by Docker update (normal)" and lila's shutdown errors from that minute
+  are not counted; restarts without a matching update, or with a kernel out-of-memory kill, still warn.
 - (2026-10) **Logo:** the Lichess knight is replaced everywhere it appeared —
   favicons, Safari mask icon (removed), Open Graph image, web-app manifest
   (`public/static/prcoffee/manifest.json`: name "Chess Puerto Rico Coffee",

@@ -34,7 +34,13 @@
 #   - lila-docker containers: any not running, unhealthy, or with RestartCount > 0 — except EXPECTED_STOPPED below:
 #     elasticvue (Elasticsearch web UI) and mailpit (dev mail catcher; real mail goes through IONOS) are dev tools in the
 #     active `search`/`email` profiles that have been stopped on purpose since 2026-09-13; they are listed, not flagged.
-#   - last 7 days of lila error.log (ERROR lines) and nginx error.log (emerg/alert/crit). Two KNOWN-BENIGN nginx patterns
+#     Restarts that line up with a Docker/containerd package update (added 2026-10-20) are listed as "ℹ️ restarted by
+#     Docker update (normal)", not flagged: upgrading docker-ce or containerd.io restarts dockerd and every container,
+#     and one that loses the start-up race (MongoDB or Elasticsearch not ready yet) is restarted by its `unless-stopped`
+#     policy. Restarts with no matching update in /var/log/apt/history.log* or /var/log/dpkg.log* still warn (section 5).
+#   - last 7 days of lila error.log (ERROR lines) and nginx error.log (emerg/alert/crit). lila's SHUTDOWN errors logged
+#     while a Docker/containerd update was running (e.g. "'interrupted at shutdown' (code = 11600)", "lila-ws stop …
+#     Lilakka.shutdown timeout") are listed with ℹ️, not counted (added 2026-10-20). Two KNOWN-BENIGN nginx patterns
 #     are counted separately and do not warn: "open() …/logs/proxy_* failed (13: Permission denied)" = nightly logrotate:
 #     nginx workers can't reopen Plesk per-site logs (harmless). /etc/logrotate.d/nginx sends nginx USR1 at ~00:00:10;
 #     the root master reopens every log, then each of the 12 www-data workers fails on the 21 per-site logs because
@@ -68,6 +74,9 @@
 #   --label TEXT  an extra (non-weekly) run: subject says "health report (TEXT)" instead of "weekly health report"
 # (Public copy: the other sites hosted on this server, their checks and the backup repo path are not listed;
 # otherwise identical to the deployed script.)
+# Test hooks (with --dry-run only): CHESS_HR_TEST_APT_GLOB, CHESS_HR_TEST_DPKG_GLOB, CHESS_HR_TEST_LILA_ERRLOG_GLOB and
+# CHESS_HR_TEST_COMPOSE_PROJECT replace /var/log/apt/history.log*, /var/log/dpkg.log*, lila's error.log* and the
+# compose project whose containers are checked.
 
 set -euo pipefail
 if [[ $EUID -ne 0 ]]; then echo "chess-health-report: run as root" >&2; exit 1; fi
@@ -98,6 +107,9 @@ ap = argparse.ArgumentParser(prog="chess-health-report.sh")
 ap.add_argument("--dry-run", action="store_true"); ap.add_argument("--test", action="store_true")
 ap.add_argument("--label", default="")
 args = ap.parse_args()
+TEST_ENV = sorted(k for k in os.environ if k.startswith("CHESS_HR_TEST_"))
+if TEST_ENV and not args.dry_run:
+    sys.exit(f"chess-health-report: {', '.join(TEST_ENV)} set: test hooks only work with --dry-run")
 now = dt.datetime.now(UTC)
 issues, sections = [], []
 
@@ -278,20 +290,108 @@ else:
 sections.append(out)
 
 # ---------------------------------------------------------------- 5. containers
-out = ["CONTAINERS (lila-docker)"]
-ids = subprocess.run(["docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=lila-docker"],
+def read_all(pattern):
+    for p in sorted(glob.glob(pattern)):
+        try:
+            op = gzip.open if p.endswith(".gz") else open
+            with op(p, "rt", errors="replace") as f:
+                yield from f
+        except OSError:
+            continue
+
+
+# Docker/containerd package updates (added 2026-10-20). Upgrading docker-ce or containerd.io restarts dockerd, which
+# stops and restarts every container (live-restore is off). Plesk's daily system update (`pum --update`, ~06:26 AST,
+# /var/log/plesk/systemupdatestool.log) installs them 2-4 times a month. On 2026-10-15 lila (MongoDB not ready within
+# its 5-s startup timeout) and the search ingestor (Elasticsearch not listening yet) lost that start-up race and were
+# restarted by `unless-stopped` within 25 s. dockerd resets RestartCount when it starts a container again (so does a
+# manual start/restart), so a count > 0 only counts restarts since then: when the LAST restart (State.StartedAt) lies
+# in an update's window, every counted restart does. A run = Start-Date..End-Date of an apt history entry that
+# upgraded/installed a DOCKER_PKGS package, or the time of such an "upgrade|install" line in dpkg.log. docker-ce-cli
+# and the plugins do not restart the daemon and do not count. Times in both logs are local (AST); Docker's are UTC.
+# An OOM kill is never "normal": Docker clears State.OOMKilled when it restarts the container (tested 2026-10-20), so
+# the kernel log is read instead (an "oom-kill:" line names the container's cgroup docker-<full id>.scope).
+DOCKER_PKGS = {"docker-ce", "containerd.io", "docker.io", "containerd"}
+RESTART_BEFORE, RESTART_AFTER = dt.timedelta(minutes=2), dt.timedelta(minutes=10)   # restart window around a run
+STOP_BEFORE, STOP_AFTER = dt.timedelta(minutes=1), dt.timedelta(minutes=1)          # lila shutdown ERRORs (section 6)
+APT_HISTORY = os.environ.get("CHESS_HR_TEST_APT_GLOB", "/var/log/apt/history.log*")
+DPKG_LOG = os.environ.get("CHESS_HR_TEST_DPKG_GLOB", "/var/log/dpkg.log*")
+COMPOSE_PROJECT = os.environ.get("CHESS_HR_TEST_COMPOSE_PROJECT", "lila-docker")
+KERN_LOG = "/var/log/kern.log*"
+
+
+def local_time(s):
+    return dt.datetime.strptime(" ".join(s.split()), "%Y-%m-%d %H:%M:%S").replace(tzinfo=AST)
+
+
+def short_ver(v):   # "5:29.9.0-1~ubuntu.22.04~jammy" -> "29.9.0"
+    return re.sub(r"-[^-]*$", "", re.sub(r"^\d+:", "", v.strip()))
+
+
+docker_runs = []   # (start, end, what): apt history entries first, so they win over the same run's dpkg lines
+run_start = run_pkgs = None
+for l in read_all(APT_HISTORY):
+    if l.startswith("Start-Date:"):
+        run_start, run_pkgs = local_time(l.split(":", 1)[1]), []
+    elif run_start and re.match(r"(Install|Upgrade|Reinstall|Downgrade): ", l):
+        for pkg, vers in re.findall(r"([\w.+-]+):[\w-]+ \(([^)]*)\)", l):
+            if pkg in DOCKER_PKGS:
+                run_pkgs.append(f"{pkg} " + " → ".join(short_ver(v) for v in vers.split(",") if v.strip() != "automatic"))
+    elif l.startswith("End-Date:") and run_start:
+        if run_pkgs:
+            docker_runs.append((run_start, local_time(l.split(":", 1)[1]), ", ".join(run_pkgs)))
+        run_start = None
+for l in read_all(DPKG_LOG):
+    m = re.match(r"(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) (upgrade|install) ([\w.+-]+):\S+ (\S+) (\S+)", l)
+    if m and m.group(3) in DOCKER_PKGS:
+        t = local_time(m.group(1))
+        docker_runs.append((t, t, f"{m.group(3)} {short_ver(m.group(4))} → {short_ver(m.group(5))}"))
+
+
+def docker_run_at(t, before, after):
+    return next((r for r in docker_runs if r[0] - before <= t <= r[1] + after), None)
+
+
+def run_txt(r):
+    return f"{r[0].astimezone(AST):%a %b %d %H:%M} AST: {r[2]}"
+
+
+oom_kills = {}   # container id -> kernel OOM-kill times (syslog time is local and has no year)
+for l in read_all(KERN_LOG):
+    m = re.search(r"oom-kill:.*?docker-([0-9a-f]{64})\.scope", l)
+    if m:
+        try:
+            t = dt.datetime.strptime(f"{now.year} {' '.join(l.split()[:3])}", "%Y %b %d %H:%M:%S").replace(tzinfo=AST)
+        except ValueError:
+            continue
+        oom_kills.setdefault(m.group(1), []).append(t.replace(year=t.year - 1) if t > now + dt.timedelta(days=1) else t)
+
+
+out = [f"CONTAINERS ({COMPOSE_PROJECT})"]
+ids = subprocess.run(["docker", "ps", "-aq", "--filter", f"label=com.docker.compose.project={COMPOSE_PROJECT}"],
                      capture_output=True, text=True).stdout.split()
-bad = 0; expected_down = []
+bad = 0; expected_down = []; by_update = []
 for c in json.loads(subprocess.run(["docker", "inspect", *ids], capture_output=True, text=True).stdout or "[]"):
-    name = c["Name"].lstrip("/").replace("lila-docker-", ""); stt = c["State"]
+    name = c["Name"].lstrip("/").replace(f"{COMPOSE_PROJECT}-", ""); stt = c["State"]
     health = (stt.get("Health") or {}).get("Status", "-"); rc = c.get("RestartCount", 0)
     if name.rsplit("-", 1)[0] in EXPECTED_STOPPED and stt["Status"] == "exited" and rc == 0:
         expected_down.append(f"{name:24} stopped on purpose ({EXPECTED_STOPPED[name.rsplit('-', 1)[0]]})"); continue
-    if stt["Status"] != "running" or health == "unhealthy" or rc > 0:
+    started = dt.datetime.strptime(stt["StartedAt"][:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=UTC)
+    run = docker_run_at(started, RESTART_BEFORE, RESTART_AFTER) if rc > 0 else None
+    oom = max((x for x in oom_kills.get(c["Id"], []) if x <= started + dt.timedelta(seconds=5)), default=None)
+    oom = oom if oom and oom >= (run[0] - RESTART_BEFORE if run else started - dt.timedelta(days=1)) else None
+    if stt["Status"] == "running" and health != "unhealthy" and rc > 0 and run and not oom:
+        by_update.append(f"ℹ️ {name:24} running, restarts {rc} — restarted by Docker update (normal), last start "
+                         f"{started.astimezone(AST):%H:%M:%S} AST; update {run_txt(run)}")
+    elif stt["Status"] != "running" or health == "unhealthy" or rc > 0:
         bad += 1
+        why = f", last start {started.astimezone(AST):%a %b %d %H:%M} AST, no Docker update then" if rc > 0 and not run else ""
+        why += f", OUT OF MEMORY (kernel OOM kill {oom:%a %b %d %H:%M:%S} AST)" if rc > 0 and oom else ""
         out.append(warn(f"container {name}: {stt['Status']}, health {health}, restarts {rc}") +
-                   f"{name:24} {stt['Status']}, health {health}, restarts {rc}")
-out.insert(1, f"{len(ids)} containers: {len(ids) - bad - len(expected_down)} running with 0 restarts" + ("" if bad else " — all OK"))
+                   f"{name:24} {stt['Status']}, health {health}, restarts {rc}{why}")
+out.insert(1, f"{len(ids)} containers: {len(ids) - bad - len(expected_down) - len(by_update)} running with 0 restarts" +
+           (f", {len(by_update)} restarted by Docker update (normal)" if by_update else "") + ("" if bad else " — all OK"))
+out += by_update
 out += [f"  {x}" for x in expected_down]
 sections.append(out)
 
@@ -390,21 +490,41 @@ sections.append(out)
 since = now - dt.timedelta(days=7)
 
 
-def read_all(pattern):
-    for p in sorted(glob.glob(pattern)):
-        try:
-            op = gzip.open if p.endswith(".gz") else open
-            with op(p, "rt", errors="replace") as f:
-                yield from f
-        except OSError:
+# lila's shutdown errors while a Docker update stops it (added 2026-10-20), e.g. 2026-10-15 10:26:45Z:
+#   ERROR reactivemongo.api.Cursor Fails to send request / DatabaseException['interrupted at shutdown' (code = 11600)]
+#   ERROR socket lila-ws stop / scalalib.future.TimeoutException: Lilakka.shutdown timeout after 1 second
+# An entry logged during a Docker update run (STOP_BEFORE/STOP_AFTER, section 5) whose ERROR line says "shutdown", or
+# whose text (that line + the exception lines under it) has one of lila's shutdown signatures LILA_SHUTDOWN_RE, is
+# listed, not counted. Any other ERROR, then or later, still warns (a bare "shutdown" deeper in a stack trace does not
+# count: tested 2026-10-20).
+LILA_SHUTDOWN_RE = re.compile(r"interrupted at shutdown|Lilakka\.shutdown|lila-ws stop|MongoConnection is closed|CoordinatedShutdown")
+LILA_ERRLOG = os.environ.get("CHESS_HR_TEST_LILA_ERRLOG_GLOB", f"{PROJECT}/repos/lila/logs/error.log*")
+
+
+def log_entries(path):   # (timestamp, first line, the lines under it) for every timestamped line
+    cur = None
+    for l in read_all(path):
+        m = re.match(r"(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)", l)
+        if m:
+            if cur: yield cur
+            cur = [m.group(1), l.strip(), ""]
+        elif cur and len(cur[2]) < 4000:
+            cur[2] += l
+    if cur: yield cur
+
+
+lila_err = []; lila_stop = []
+for path in sorted(glob.glob(LILA_ERRLOG)):
+    for ts, first, more in log_entries(path):
+        t = dt.datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+        if " ERROR " not in first or t < since:
             continue
-
-
-lila_err = []
-for l in read_all(f"{PROJECT}/repos/lila/logs/error.log*"):
-    m = re.match(r"(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)", l)
-    if m and " ERROR " in l and dt.datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC) >= since:
-        lila_err.append(re.sub(r"^\S+ \S+ ERROR\s+", "", l.strip())[:90])
+        msg = re.sub(r"^\S+ \S+ ERROR\s+", "", first)[:90]
+        run = docker_run_at(t, STOP_BEFORE, STOP_AFTER)
+        if run and (re.search(r"shutdown", msg, re.I) or LILA_SHUTDOWN_RE.search(first + "\n" + more)):
+            lila_stop.append((run, msg))
+        else:
+            lila_err.append(msg)
 counts = {"emerg": 0, "alert": 0, "crit": 0, "error": 0}; benign_perm = benign_tls = benign_test = 0; other = []
 since_ng = since.astimezone(AST).strftime("%Y/%m/%d %H:%M:%S")
 for l in read_all("/var/log/nginx/error.log*"):
@@ -424,6 +544,11 @@ flag = warn(f"{len(lila_err)} lila ERROR lines") if lila_err else ""
 out.append(f"{flag}lila error.log: {len(lila_err)} ERROR lines")
 for msg, n in sorted({m: lila_err.count(m) for m in lila_err}.items(), key=lambda kv: -kv[1])[:3]:
     out.append(f"    {n} × {msg}")
+for run in sorted({r for r, _ in lila_stop}):
+    msgs = [m for r, m in lila_stop if r == run]
+    out.append(f"ℹ️ {len(msgs)} lila shutdown ERROR line{'s' if len(msgs) != 1 else ''} while a Docker update restarted the "
+               f"containers (normal, not counted) — update {run_txt(run)}")
+    out.append("    " + "; ".join(sorted(set(msgs))))
 unexpected = counts["emerg"] + counts["alert"] + counts["crit"]
 flag = warn(f"{unexpected} unexpected nginx emerg/alert/crit lines") if unexpected else ""
 out.append(f"{flag}nginx error.log: {unexpected} unexpected emerg/alert/crit, {counts['error']} [error]")
