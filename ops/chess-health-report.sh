@@ -719,7 +719,7 @@ out.append(f"{flag}drift checker: {len(fails)} FAIL, {sum(' no-op' in l for l in
 out += [f"    {l[:120]}" for l in fails[-2:]]
 sections.append(out)
 
-# ---------------------------------------------------------------- 11-12. (public copy: the checks of another site on this server are omitted)
+# ---------------------------------------------------------------- 11-13. (public copy: the checks of other sites on this server are omitted)
 
 # ---------------------------------------------------------------- compose + send
 ok = not issues
