@@ -172,8 +172,8 @@ source-disclosure requirements.
   in the local database (`GameJson.scala`), which a CSV import does not provide; the
   2026-10 attempt was rolled back for that reason.
 - **ops/chess-puzzle-regen-paths.sh** (2026-10): wrapper for upstream's
-  `cron/mongodb-puzzle-regen-paths.js` (lock, logging, fails loudly); its cron entry is
-  included but not installed while only the seed puzzle set is loaded.
+  `cron/mongodb-puzzle-regen-paths.js` (lock, logging, fails loudly); it is not scheduled
+  (no cron entry is installed) while only the seed puzzle set is loaded.
 - **ops/** (2026-10): deployment scripts and units — daily-puzzle recycling
   (`chess-recycle-daily-puzzles.sh` + cron), nightly MongoDB dump with read-back
   verification (`chess-mongodump.sh` + cron), and the contact-form service unit
