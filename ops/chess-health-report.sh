@@ -57,6 +57,17 @@
 #     maintainer scripts restart nginx (plesk-core, plesk-modsecurity-crs; found by scanning /var/lib/dpkg/info
 #     2026-10-28). A restart makes the old worker log "open socket #N left in connection" + "aborting" (2026-10-26
 #     passenger, 2026-10-27 nginx-core). Every other emerg/alert/crit line still warns.
+#     RULE D (added 2026-10-28): REBOOTS, handled like Docker updates. A reboot is read from wtmp (`last -x`: the
+#     "shutdown system down" time + the "reboot system boot" time) and the journal boot list (previous boot's last entry
+#     + this boot's first entry, used when wtmp has no record for that boot). A container restart (last start), or an
+#     ERROR entry in lila's error.log (lila and its lila-ws socket and MongoDB "connection closed" lines all land there),
+#     is listed with ℹ️ and the reboot time, not counted, ONLY when it falls between 2 min before the recorded shutdown
+#     and 10 min after the boot AND the same service shows no further restart / ERROR in the 30 min after that window
+#     (the report must run at least 30 min after the window, or it still warns). Nothing else is affected: an nginx or
+#     unattended-upgrades line in the window, a restart 20 min after boot, an OOM kill or an unhealthy container warn.
+#     Seen 2026-10-28: the search ingestor restarted twice because Elasticsearch opened :9200 21 s after it started, and
+#     lila logged 3 shutdown errors while the host went down; compose depends_on would not help (dockerd starts the
+#     containers at boot, not compose).
 #   - RAM and swap: warn when available RAM < 10 % or swap > 50 % used
 #   (added 2026-10-03, second batch — owner request)
 #   - nginx: warn when nothing listens on :443 or :80 (the 2026-09-17 "inherited sockets" trap: nginx active and
@@ -94,6 +105,9 @@
 # /var/log/unattended-upgrades/unattended-upgrades.log*; CHESS_HR_TEST_NOW and CHESS_HR_TEST_SINCE (ISO 8601, e.g.
 # 2026-10-28T17:00:00Z) set the report time and the start of the error/updates window (default: 7 days back);
 # CHESS_HR_TEST_LOG receives the DRY line instead of /var/log/chess-health-report.log.
+# Added 2026-10-28 (RULE D): CHESS_HR_TEST_BOOTS = a file with one reboot per line, "SHUTDOWN BOOT" in ISO 8601 ("-" for
+# no recorded shutdown), replacing wtmp + the journal boot list; CHESS_HR_TEST_CONTAINERS_JSON = a `docker inspect` JSON
+# array replacing the live containers of the compose project.
 
 set -euo pipefail
 if [[ $EUID -ne 0 ]]; then echo "chess-health-report: run as root" >&2; exit 1; fi
@@ -375,6 +389,46 @@ def run_txt(r):
     return f"{r[0].astimezone(AST):%a %b %d %H:%M} AST: {r[2]}"
 
 
+# RULE D (2026-10-28, see the header): reboots, the same way as Docker updates above.
+REBOOT_BEFORE, REBOOT_AFTER, REBOOT_QUIET = dt.timedelta(minutes=2), dt.timedelta(minutes=10), dt.timedelta(minutes=30)
+
+
+def iso_time(s):
+    return dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+
+reboots = []   # (recorded shutdown, boot, source); shutdown = boot when none was recorded (crash, power loss)
+if "CHESS_HR_TEST_BOOTS" in os.environ:
+    for l in open(os.environ["CHESS_HR_TEST_BOOTS"]):
+        f_ = l.split()
+        if len(f_) >= 2 and not f_[0].startswith("#"):
+            reboots.append((iso_time(f_[1]) if f_[0] == "-" else iso_time(f_[0]), iso_time(f_[1]), "test"))
+else:
+    w_ = subprocess.run(["last", "-x", "--time-format", "iso", "reboot", "shutdown"], capture_output=True, text=True).stdout
+    downs = [iso_time(m.group(1)) for m in re.finditer(r"^shutdown\s+system down\s+\S+\s+(\S+)", w_, re.M)]
+    for m in re.finditer(r"^reboot\s+system boot\s+\S+\s+(\S+)", w_, re.M):
+        b_ = iso_time(m.group(1))
+        reboots.append((max((x for x in downs if b_ - dt.timedelta(days=1) <= x <= b_), default=b_), b_, "wtmp"))
+    j_ = subprocess.run(["journalctl", "--list-boots", "--no-pager"], capture_output=True, text=True).stdout
+    spans = [(local_time(m.group(1)), local_time(m.group(2)))
+             for m in re.finditer(r"\w{3} (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \w+—\w{3} (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)", j_)]
+    for (_, prev_end), (b_, _) in zip(spans, spans[1:]):
+        if not any(abs(r[1] - b_) <= REBOOT_BEFORE for r in reboots):
+            reboots.append((prev_end, b_, "journal"))
+
+
+def reboot_at(t):   # the reboot whose window [shutdown - 2 min, boot + 10 min] holds t, or None
+    return next((r for r in reboots if r[0] - REBOOT_BEFORE <= t <= r[1] + REBOOT_AFTER), None)
+
+
+def reboot_quiet_seen(r):   # the 30 min after the window have passed (so "nothing further" is a fact, not a guess)
+    return now >= r[1] + REBOOT_AFTER + REBOOT_QUIET
+
+
+def reboot_txt(r):
+    return f"shutdown {r[0].astimezone(AST):%a %b %d %H:%M:%S}, boot {r[1].astimezone(AST):%H:%M:%S} AST ({r[2]})"
+
+
 oom_kills = {}   # container id -> kernel OOM-kill times (syslog time is local and has no year)
 for l in read_all(KERN_LOG):
     m = re.search(r"oom-kill:.*?docker-([0-9a-f]{64})\.scope", l)
@@ -387,10 +441,15 @@ for l in read_all(KERN_LOG):
 
 
 out = [f"CONTAINERS ({COMPOSE_PROJECT})"]
-ids = subprocess.run(["docker", "ps", "-aq", "--filter", f"label=com.docker.compose.project={COMPOSE_PROJECT}"],
-                     capture_output=True, text=True).stdout.split()
-bad = 0; expected_down = []; by_update = []
-for c in json.loads(subprocess.run(["docker", "inspect", *ids], capture_output=True, text=True).stdout or "[]"):
+CONTAINERS_JSON = os.environ.get("CHESS_HR_TEST_CONTAINERS_JSON")   # test hook (dry-run only): a `docker inspect` array
+if CONTAINERS_JSON:
+    cinfo = json.load(open(CONTAINERS_JSON)); ids = [c["Id"] for c in cinfo]
+else:
+    ids = subprocess.run(["docker", "ps", "-aq", "--filter", f"label=com.docker.compose.project={COMPOSE_PROJECT}"],
+                         capture_output=True, text=True).stdout.split()
+    cinfo = json.loads(subprocess.run(["docker", "inspect", *ids], capture_output=True, text=True).stdout or "[]")
+bad = 0; expected_down = []; by_update = []; by_reboot = []
+for c in cinfo:
     name = c["Name"].lstrip("/").replace(f"{COMPOSE_PROJECT}-", ""); stt = c["State"]
     health = (stt.get("Health") or {}).get("Status", "-"); rc = c.get("RestartCount", 0)
     if name.rsplit("-", 1)[0] in EXPECTED_STOPPED and stt["Status"] == "exited" and rc == 0:
@@ -402,15 +461,20 @@ for c in json.loads(subprocess.run(["docker", "inspect", *ids], capture_output=T
     if stt["Status"] == "running" and health != "unhealthy" and rc > 0 and run and not oom:
         by_update.append(f"ℹ️ {name:24} running, restarts {rc} — restarted by Docker update (normal), last start "
                          f"{started.astimezone(AST):%H:%M:%S} AST; update {run_txt(run)}")
+    elif (stt["Status"] == "running" and health != "unhealthy" and rc > 0 and not oom
+          and (rb := reboot_at(started)) and reboot_quiet_seen(rb)):   # RULE D: last start inside the reboot window
+        by_reboot.append(f"ℹ️ {name:24} running, restarts {rc} — restarted while the server rebooted (normal), last start "
+                         f"{started.astimezone(AST):%H:%M:%S} AST, no restart since; reboot {reboot_txt(rb)}")
     elif stt["Status"] != "running" or health == "unhealthy" or rc > 0:
         bad += 1
         why = f", last start {started.astimezone(AST):%a %b %d %H:%M} AST, no Docker update then" if rc > 0 and not run else ""
         why += f", OUT OF MEMORY (kernel OOM kill {oom:%a %b %d %H:%M:%S} AST)" if rc > 0 and oom else ""
         out.append(warn(f"container {name}: {stt['Status']}, health {health}, restarts {rc}") +
                    f"{name:24} {stt['Status']}, health {health}, restarts {rc}{why}")
-out.insert(1, f"{len(ids)} containers: {len(ids) - bad - len(expected_down) - len(by_update)} running with 0 restarts" +
-           (f", {len(by_update)} restarted by Docker update (normal)" if by_update else "") + ("" if bad else " — all OK"))
-out += by_update
+out.insert(1, f"{len(ids)} containers: {len(ids) - bad - len(expected_down) - len(by_update) - len(by_reboot)} running with 0 restarts" +
+           (f", {len(by_update)} restarted by Docker update (normal)" if by_update else "") +
+           (f", {len(by_reboot)} restarted while the server rebooted (normal)" if by_reboot else "") + ("" if bad else " — all OK"))
+out += by_update + by_reboot
 out += [f"  {x}" for x in expected_down]
 sections.append(out)
 
@@ -533,16 +597,21 @@ def log_entries(path):   # (timestamp, first line, the lines under it) for every
     if cur: yield cur
 
 
-lila_err = []; lila_stop = []
-for path in sorted(glob.glob(LILA_ERRLOG)):
-    for ts, first, more in log_entries(path):
-        t = dt.datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+lila_err = []; lila_stop = []; lila_boot = []
+lila_entries = [(dt.datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC), first, more)
+                for path in sorted(glob.glob(LILA_ERRLOG)) for ts, first, more in log_entries(path)]
+lila_err_times = [t for t, first, _ in lila_entries if " ERROR " in first]   # all of them, for RULE D's 30-min check
+for t, first, more in lila_entries:
         if " ERROR " not in first or t < since:
             continue
         msg = re.sub(r"^\S+ \S+ ERROR\s+", "", first)[:90]
         run = docker_run_at(t, STOP_BEFORE, STOP_AFTER)
+        rb = reboot_at(t)
         if run and (re.search(r"shutdown", msg, re.I) or LILA_SHUTDOWN_RE.search(first + "\n" + more)):
             lila_stop.append((run, msg))
+        elif (rb and reboot_quiet_seen(rb) and not any(rb[1] + REBOOT_AFTER < x <= rb[1] + REBOOT_AFTER + REBOOT_QUIET
+                                                       for x in lila_err_times)):   # RULE D
+            lila_boot.append((rb, msg))
         else:
             lila_err.append(msg)
 # RULE A (2026-10-28, see the header): emerg/alert/crit within NGINX_PKG_WINDOW of a dpkg install/upgrade of a package
@@ -597,6 +666,11 @@ for run in sorted({r for r, _ in lila_stop}):
     msgs = [m for r, m in lila_stop if r == run]
     out.append(f"ℹ️ {len(msgs)} lila shutdown ERROR line{'s' if len(msgs) != 1 else ''} while a Docker update restarted the "
                f"containers (normal, not counted) — update {run_txt(run)}")
+    out.append("    " + "; ".join(sorted(set(msgs))))
+for rb in sorted({r for r, _ in lila_boot}):
+    msgs = [m for r, m in lila_boot if r == rb]
+    out.append(f"ℹ️ {len(msgs)} lila ERROR line{'s' if len(msgs) != 1 else ''} while the server rebooted (normal, not counted; "
+               f"none in the 30 min after) — reboot {reboot_txt(rb)}")
     out.append("    " + "; ".join(sorted(set(msgs))))
 unexpected = counts["emerg"] + counts["alert"] + counts["crit"]
 flag = warn(f"{unexpected} unexpected nginx emerg/alert/crit lines") if unexpected else ""
