@@ -20,6 +20,17 @@
 #       puzzle recycle 04:15 daily (26 h), mongodump 03:30 daily (26 h), auto-feed Mon+Thu 08:00 (4.5 days),
 #       video refresh Sun 07:00 (8 days), bgjobs cleanup Sun 04:45 (8 days)
 #   - versions of the chess stack (lila commit + local commits, lila-fishnet, lila-ws image, fishnet, mongo/redis), informational
+#   - UPSTREAM (added 2026-10-28, owner request): read-only — GitHub's public REST API only (unauthenticated, 60 calls an
+#     hour per IP; a run makes 7) plus local read-only git; nothing is fetched or pulled. (1) Security advisories of
+#     lichess-org/lila, lila-ws and lila-fishnet published after what runs here (lila: the upstream commit the local
+#     branch is based on = merge-base of HEAD with origin/master or master, whichever is newer; lila-fishnet: its HEAD;
+#     lila-ws: the build time of the running image): each one is an "UPGRADE NOW" attention item, unless a commit named
+#     in its patched_versions is already in the build (lila, lila-fishnet: `git merge-base --is-ancestor` locally;
+#     lila-ws: the commit its image was built from, found in the image-publish workflow runs, compared on GitHub) — then
+#     it is listed with ℹ️. A failed advisory lookup warns too (a silent miss would look like "no advisories").
+#     (2) Age of the lila base commit and how many commits upstream master is ahead: "UPGRADE SUGGESTED" when the base
+#     is older than 60 days. (3) Newer fishnet release / newer lila-ws image (publish runs after the running image's
+#     build time): informational.
 #   - BLOG APPROVAL (added 2026-10-08): lists published blog posts nobody has rated yet. They stay out of the community
 #     list and blog search until a moderator clicks Weak or Good on the post page (Spam = reject). Each
 #     waiting post is an attention item, with its link.
@@ -108,6 +119,8 @@
 # Added 2026-10-28 (RULE D): CHESS_HR_TEST_BOOTS = a file with one reboot per line, "SHUTDOWN BOOT" in ISO 8601 ("-" for
 # no recorded shutdown), replacing wtmp + the journal boot list; CHESS_HR_TEST_CONTAINERS_JSON = a `docker inspect` JSON
 # array replacing the live containers of the compose project.
+# Added 2026-10-28 (UPSTREAM): CHESS_HR_TEST_GITHUB_DIR = a directory of JSON files replacing api.github.com: the API
+# path with every "/", "?", "&" and "=" turned into "_", plus ".json" (a missing file = that call fails).
 
 set -euo pipefail
 if [[ $EUID -ne 0 ]]; then echo "chess-health-report: run as root" >&2; exit 1; fi
@@ -116,6 +129,7 @@ flock -n 9 || { echo "$(date -u +%FT%TZ) SKIP another run holds the lock" >> /va
 
 exec python3 - "$@" <<'PY'
 import argparse, datetime as dt, glob, gzip, hashlib, json, os, re, shutil, smtplib, socket, ssl, subprocess, sys
+import urllib.error, urllib.request
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 
@@ -535,6 +549,161 @@ if rb or os.path.isdir("/root/prebuilt-switch-20261008"):
     out.append("sbt rollback  kept: " + ", ".join(rb + (["/root/prebuilt-switch-20261008/"] if os.path.isdir("/root/prebuilt-switch-20261008") else [])) +
                (" (until 2026-10-15)" if now < dt.datetime(2026, 10, 15, 22, 0, tzinfo=UTC) else
                 " — past 2026-10-15: delete when the owner agrees (CLAUDE.md, prebuilt section)"))
+sections.append(out)
+
+# ---------------------------------------------------------------- 5b2. upstream (added 2026-10-28, owner request)
+# Read-only: GitHub's public REST API (unauthenticated) + local read-only git. Nothing is fetched or pulled.
+GH_ORG, UPGRADE_SUGGEST_DAYS, gh_down = "lichess-org", 60, []
+GH_ERRORS = (OSError, ValueError, KeyError, TypeError, AttributeError)
+
+
+def gh_api(path):
+    """JSON of GET https://api.github.com/<path>; OSError on any failure (after a network error the rest fail fast)."""
+    if "CHESS_HR_TEST_GITHUB_DIR" in os.environ:
+        f = os.path.join(os.environ["CHESS_HR_TEST_GITHUB_DIR"], re.sub(r"[/?&=]", "_", path) + ".json")
+        if not os.path.exists(f):
+            raise OSError(f"test: no {os.path.basename(f)}")
+        return json.load(open(f))
+    if gh_down:
+        raise OSError(gh_down[0])
+    req = urllib.request.Request(f"https://api.github.com/{path}", headers={
+        "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "chess-health-report (chesspuertoricocoffee.com)"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.load(r)
+    except urllib.error.HTTPError as e:
+        raise OSError(f"HTTP {e.code}" + (" — rate limit" if e.headers.get("X-RateLimit-Remaining") == "0" else ""))
+    except OSError as e:   # DNS, refused, timeout (URLError is an OSError)
+        gh_down.append(f"GitHub API unreachable: {getattr(e, 'reason', e)}")
+        raise OSError(gh_down[0])
+
+
+def git_ok(repo, *a):
+    return subprocess.run(["git", "--no-optional-locks", "-c", "safe.directory=*", "-C", f"{PROJECT}/repos/{repo}", *a],
+                          capture_output=True).returncode == 0
+
+
+def git_time(repo, rev):
+    t = git_info(repo, "log", "-1", "--format=%cI", rev)
+    return None if t == "?" else iso(t)
+
+
+def patch_shas(repo, adv):
+    """Commit ids named in an advisory's patched_versions ('owner/repo@sha' of another repository is skipped)."""
+    pv = " ".join(v.get("patched_versions") or "" for v in adv.get("vulnerabilities") or [])
+    return [s for r, s in re.findall(r"(?:([\w.-]+/[\w.-]+)@)?\b([0-9a-f]{7,40})\b", pv) if r in ("", f"{GH_ORG}/{repo}")]
+
+
+def advisories(repo, since, has_commit):
+    """(rows, error): security advisories of lichess-org/<repo> published after `since`, each UPGRADE NOW unless fixed."""
+    try:
+        advs = gh_api(f"repos/{GH_ORG}/{repo}/security-advisories?per_page=100")
+        new = sorted((a for a in advs if a.get("state") == "published" and not a.get("withdrawn_at")
+                      and a.get("published_at") and iso(a["published_at"]) > since), key=lambda a: a["published_at"])
+    except GH_ERRORS as e:
+        return [f"{repo:13} security advisories NOT checked ({e})"], e
+    rows = []
+    for a in new:
+        what = (f"{a.get('ghsa_id', '?')} ({a.get('severity') or '?'}), published "
+                f"{iso(a['published_at']).astimezone(AST):%Y-%m-%d}: {(a.get('summary') or '').strip()[:90]}")
+        fixed = next((s for s in patch_shas(repo, a) if has_commit(s)), None)
+        if fixed:
+            rows.append(f"ℹ️ {repo}: {what} — already fixed in your build (it contains {fixed[:10]})")
+        else:
+            rows.append(warn(f"UPGRADE NOW: {repo} security advisory {what} — {a.get('html_url', '')}")
+                        + f"{repo}: {what} — {a.get('html_url', '')}")
+    return rows or [f"{repo:13} no security advisory published since {since.astimezone(AST):%Y-%m-%d %H:%M} AST "
+                    f"({len(advs)} older on record)"], None
+
+
+out = ["UPSTREAM (GitHub API, read-only: nothing is fetched or pulled; an upgrade stays a deliberate, staged job)"]
+# lila: the upstream commit the local branch is based on (origin/master moves only when someone fetches)
+bases = {b for b in (git_info("lila", "merge-base", "HEAD", ref) for ref in ("origin/master", "master")) if b != "?"}
+base = max(bases, key=lambda b: git_time("lila", b) or dt.datetime.min.replace(tzinfo=UTC)) if bases else None
+base_t = git_time("lila", base) if base else None
+if not base_t:
+    out.append(warn("upstream: lila base commit not found (git merge-base HEAD origin/master or master)") +
+               "lila          base commit not found")
+else:
+    days = (now - base_t).days
+    try:
+        ahead = gh_api(f"repos/{GH_ORG}/lila/compare/{base}...master?per_page=1")["ahead_by"]
+        head = gh_api(f"repos/{GH_ORG}/lila/commits/master")
+        up = (f"upstream master {head['sha'][:7]} of {iso(head['commit']['committer']['date']).astimezone(AST):%Y-%m-%d} "
+              f"is {ahead} commit(s) ahead")
+    except GH_ERRORS as e:
+        ahead, up = "?", f"upstream NOT checked ({e})"
+    row = (f"lila          base {base[:7]} of {base_t.astimezone(AST):%Y-%m-%d} ({days} days old; UPGRADE SUGGESTED after "
+           f"{UPGRADE_SUGGEST_DAYS}) — {up}")
+    if days > UPGRADE_SUGGEST_DAYS and ahead != 0:
+        row = warn(f"UPGRADE SUGGESTED: the lila base {base[:7]} is {days} days old (over {UPGRADE_SUGGEST_DAYS}); "
+                   f"upstream master is {ahead} commits ahead") + row
+    out.append(row)
+
+# lila-ws: build time of the running image; its commit = the image-publish run (docker.yml) that was building then
+ws_t = ws_sha = None; ws_row = None
+img = subprocess.run(["docker", "inspect", "-f", "{{.Image}}", "lila-docker-lila_ws-1"], capture_output=True, text=True).stdout.strip()
+c = subprocess.run(["docker", "image", "inspect", "-f", "{{.Created}}", img], capture_output=True, text=True) if img else None
+if c and c.returncode == 0 and c.stdout.strip():
+    ws_t = iso(re.sub(r"\.\d+", "", c.stdout.strip()))   # RFC 3339 with nanoseconds: Python 3.10 parses whole seconds only
+try:
+    if not ws_t:
+        raise OSError("running lila-ws image not found")
+    runs = gh_api(f"repos/{GH_ORG}/lila-ws/actions/workflows/docker.yml/runs?branch=master&status=success&per_page=30")["workflow_runs"]
+    mine = ([x for x in runs if iso(x["created_at"]) <= ws_t <= iso(x["updated_at"])] or   # build time is inside its run
+            [x for x in runs if iso(x["created_at"]) <= ws_t <= iso(x["updated_at"]) + dt.timedelta(minutes=5)])
+    if mine:   # overlapping runs: take the oldest candidate, so a fix is never assumed present
+        ws_sha = min(mine, key=lambda x: x["created_at"])["head_sha"]
+    of = f" of {ws_sha[:7]}{'?' if len(mine) > 1 else ''}" if ws_sha else ""
+    newer = [x for x in runs if iso(x["created_at"]) > ws_t]
+    if newer:
+        ws_row = (f"lila-ws       newer image: the {iso(newer[0]['updated_at']).astimezone(AST):%Y-%m-%d} build of "
+                  f"{newer[0]['head_sha'][:7]}, {len(newer)}{'+' if len(newer) == len(runs) else ''} image build(s) after "
+                  f"yours (you run the {ws_t.astimezone(AST):%Y-%m-%d} build{of}); info only")
+    else:
+        ws_row = f"lila-ws       you run the newest image (the {ws_t.astimezone(AST):%Y-%m-%d} build{of})"
+except GH_ERRORS as e:
+    ws_row = f"lila-ws       newer image NOT checked ({e})"
+
+
+def ws_has(sha):
+    try:
+        return bool(ws_sha) and gh_api(f"repos/{GH_ORG}/lila-ws/compare/{sha}...{ws_sha}")["status"] in ("ahead", "identical")
+    except GH_ERRORS:
+        return False
+
+
+failed = []
+for repo, since, has in (("lila", base_t, lambda s: git_ok("lila", "merge-base", "--is-ancestor", s, "HEAD")),
+                         ("lila-ws", ws_t, ws_has),
+                         ("lila-fishnet", git_time("lila-fishnet", "HEAD"),
+                          lambda s: git_ok("lila-fishnet", "merge-base", "--is-ancestor", s, "HEAD"))):
+    rows, err = advisories(repo, since, has) if since else ([f"{repo:13} security advisories NOT checked (no build date)"], "no build date")
+    if err:
+        failed.append((repo, err, len(out)))
+    out += rows
+if failed:
+    flag = warn(f"upstream: security advisories NOT checked for {', '.join(r for r, _, _ in failed)} ({failed[0][1]})")
+    for _, _, i in failed:
+        out[i] = flag + out[i]
+out.append(ws_row)
+
+# fishnet: newest GitHub release vs the running image tag
+try:
+    rel = gh_api(f"repos/{GH_ORG}/fishnet/releases/latest")
+    latest, fimg = rel["tag_name"].lstrip("v"), image_of("fishnet_play").split("@")[0]
+    cur = fimg.rsplit(":", 1)[1] if ":" in fimg else "?"
+    ver = lambda s: tuple(int(x) for x in re.findall(r"\d+", s))
+    if cur == "?":
+        out.append(f"fishnet       newest release {latest}; running version unknown ({fimg})")
+    elif ver(latest) > ver(cur):
+        out.append(f"fishnet       {latest} released {iso(rel['published_at']).astimezone(AST):%Y-%m-%d} (you run {cur}); "
+                   f"info only — {rel.get('html_url', '')}")
+    else:
+        out.append(f"fishnet       you run {cur}, the newest release")
+except GH_ERRORS as e:
+    out.append(f"fishnet       newer release NOT checked ({e})")
 sections.append(out)
 
 # ---------------------------------------------------------------- 5c. search (added 2026-10-08)
