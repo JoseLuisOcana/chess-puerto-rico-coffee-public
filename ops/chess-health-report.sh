@@ -49,6 +49,14 @@
 #     client-side TLS aborts ("SSL_do_handshake()",
 #     "SSL_read()" or "SSL_write() failed"), and emerg lines about a config file outside /etc/nginx (someone running
 #     `nginx -t` on a scratch copy) or failing to open a file under /tmp/claude-* (a Claude Code test rig, 2026-10-08). Anything else at emerg/alert/crit warns.
+#     RULE A (added 2026-10-28): an emerg/alert/crit line logged within 10 minutes (either side) of a dpkg.log
+#     "install" or "upgrade" of a package that restarts nginx is listed with ℹ️, not counted; its reason lists EVERY such
+#     package event inside that window, in time order (2026-10-28: was only the nearest one). Those
+#     packages: nginx, nginx-core/-common/-full/-light/-extras, libnginx-mod-*, sw-nginx, any name containing
+#     "passenger" (Plesk's passenger postinst runs `pleskrc nginx try-restart`), and the Plesk components whose
+#     maintainer scripts restart nginx (plesk-core, plesk-modsecurity-crs; found by scanning /var/lib/dpkg/info
+#     2026-10-28). A restart makes the old worker log "open socket #N left in connection" + "aborting" (2026-10-26
+#     passenger, 2026-10-27 nginx-core). Every other emerg/alert/crit line still warns.
 #   - RAM and swap: warn when available RAM < 10 % or swap > 50 % used
 #   (added 2026-10-03, second batch — owner request)
 #   - nginx: warn when nothing listens on :443 or :80 (the 2026-09-17 "inherited sockets" trap: nginx active and
@@ -64,6 +72,11 @@
 #     /etc/apt/preferences.d/no-sw-nginx is missing or sw-nginx has an install candidate, and when /usr/sbin/nginx
 #     is not Ubuntu's nginx-core. From 2027-01-01, on Ubuntu 22.04 without Ubuntu Pro attached: "Ubuntu 22.04
 #     support ends April 2027: plan Ubuntu Pro or 24.04".
+#     RULE B (added 2026-10-28): an unattended-upgrades ERROR "Lock could not be acquired" (case-insensitive; another
+#     package manager, e.g. Plesk's installer at ~06:26 AST, held the apt lock) is listed with ℹ️, not counted, only
+#     when a later unattended-upgrades run starting within 24 h finished cleanly (no ERROR/CRITICAL line and a
+#     completion line: "No packages found that can be upgraded unattended", "All upgrades installed" or "Packages that
+#     were upgraded"). Every other ERROR line, and a lock error with no such run, still warns.
 #   - Let's Encrypt: ERR/WARN lines from Plesk's letsencrypt/sslit extensions in /var/log/plesk/panel.log (Plesk logs
 #     nothing on a successful renewal), and FAIL lines of the cert drift checker (/var/log/le-cert-renewal-check.log),
 #     last 7 days.
@@ -77,6 +90,10 @@
 # Test hooks (with --dry-run only): CHESS_HR_TEST_APT_GLOB, CHESS_HR_TEST_DPKG_GLOB, CHESS_HR_TEST_LILA_ERRLOG_GLOB and
 # CHESS_HR_TEST_COMPOSE_PROJECT replace /var/log/apt/history.log*, /var/log/dpkg.log*, lila's error.log* and the
 # compose project whose containers are checked.
+# Added 2026-10-28: CHESS_HR_TEST_NGINX_ERRLOG_GLOB and CHESS_HR_TEST_UU_GLOB replace /var/log/nginx/error.log* and
+# /var/log/unattended-upgrades/unattended-upgrades.log*; CHESS_HR_TEST_NOW and CHESS_HR_TEST_SINCE (ISO 8601, e.g.
+# 2026-10-28T17:00:00Z) set the report time and the start of the error/updates window (default: 7 days back);
+# CHESS_HR_TEST_LOG receives the DRY line instead of /var/log/chess-health-report.log.
 
 set -euo pipefail
 if [[ $EUID -ne 0 ]]; then echo "chess-health-report: run as root" >&2; exit 1; fi
@@ -110,7 +127,9 @@ args = ap.parse_args()
 TEST_ENV = sorted(k for k in os.environ if k.startswith("CHESS_HR_TEST_"))
 if TEST_ENV and not args.dry_run:
     sys.exit(f"chess-health-report: {', '.join(TEST_ENV)} set: test hooks only work with --dry-run")
-now = dt.datetime.now(UTC)
+now = (dt.datetime.fromisoformat(os.environ["CHESS_HR_TEST_NOW"].replace("Z", "+00:00"))
+       if "CHESS_HR_TEST_NOW" in os.environ else dt.datetime.now(UTC))
+LOG = os.environ.get("CHESS_HR_TEST_LOG", LOG)
 issues, sections = [], []
 
 
@@ -487,7 +506,8 @@ for w in waiting or []:
 sections.append(out)
 
 # ---------------------------------------------------------------- 6. errors, last 7 days
-since = now - dt.timedelta(days=7)
+since = (dt.datetime.fromisoformat(os.environ["CHESS_HR_TEST_SINCE"].replace("Z", "+00:00"))
+         if "CHESS_HR_TEST_SINCE" in os.environ else now - dt.timedelta(days=7))
 
 
 # lila's shutdown errors while a Docker update stops it (added 2026-10-20), e.g. 2026-10-15 10:26:45Z:
@@ -525,9 +545,33 @@ for path in sorted(glob.glob(LILA_ERRLOG)):
             lila_stop.append((run, msg))
         else:
             lila_err.append(msg)
+# RULE A (2026-10-28, see the header): emerg/alert/crit within NGINX_PKG_WINDOW of a dpkg install/upgrade of a package
+# that restarts nginx -> listed as ℹ️ with the package, not counted. dpkg.log and nginx's error.log are both in local time.
+NGINX_ERRLOG = os.environ.get("CHESS_HR_TEST_NGINX_ERRLOG_GLOB", "/var/log/nginx/error.log*")
+NGINX_PKG_WINDOW = dt.timedelta(minutes=10)
+NGINX_RESTARTING_PLESK = {"plesk-core", "plesk-modsecurity-crs"}
+
+
+def restarts_nginx(pkg):
+    return (bool(re.fullmatch(r"nginx(-core|-common|-full|-light|-extras)?|libnginx-mod-[\w.+-]+|sw-nginx", pkg))
+            or "passenger" in pkg or pkg in NGINX_RESTARTING_PLESK)
+
+
+nginx_pkg_events = []   # (time, action, package, new version)
+for l in read_all(DPKG_LOG):
+    m = re.match(r"(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) (upgrade|install) ([\w.+-]+):\S+ (\S+) (\S+)", l)
+    if m and restarts_nginx(m.group(3)):
+        nginx_pkg_events.append((local_time(m.group(1)), m.group(2), m.group(3), m.group(5)))
+
+
+def nginx_pkg_events_near(t):   # every package event within the window of t, in time order (empty list = none)
+    return sorted((e for e in nginx_pkg_events if abs(e[0] - t) <= NGINX_PKG_WINDOW), key=lambda e: e[0])
+
+
 counts = {"emerg": 0, "alert": 0, "crit": 0, "error": 0}; benign_perm = benign_tls = benign_test = 0; other = []
+pkg_explained = []   # (package events in the window, message, time) of emerg/alert/crit lines explained by RULE A
 since_ng = since.astimezone(AST).strftime("%Y/%m/%d %H:%M:%S")
-for l in read_all("/var/log/nginx/error.log*"):
+for l in read_all(NGINX_ERRLOG):
     if l[:19] < since_ng or not re.match(r"\d{4}/\d\d/\d\d", l):
         continue
     m = re.search(r"\[(emerg|alert|crit|error)\]", l)
@@ -537,6 +581,11 @@ for l in read_all("/var/log/nginx/error.log*"):
     if lvl == "crit" and re.search(r"SSL_(do_handshake|read|write)\(\) failed", l): benign_tls += 1; continue
     if lvl == "emerg" and re.search(r" in (?!/etc/nginx/)/\S+:\d+", l): benign_test += 1; continue
     if lvl == "emerg" and 'open() "/tmp/claude-' in l: benign_test += 1; continue   # Claude Code test rig (scratch prefix)
+    if lvl != "error":
+        tn = dt.datetime.strptime(l[:19], "%Y/%m/%d %H:%M:%S").replace(tzinfo=AST)
+        evs = nginx_pkg_events_near(tn)
+        if evs:
+            pkg_explained.append((evs, re.sub(r"^\S+ \S+ ", "", l.strip())[:110], tn)); continue
     counts[lvl] += 1
     if lvl != "error": other.append(re.sub(r"^\S+ \S+ ", "", l.strip())[:110])
 out = ["ERRORS (last 7 days)"]
@@ -557,6 +606,17 @@ for msg in other[-3:]:
 out.append(f"    known benign (not counted): {benign_perm} lines from the nightly logrotate: nginx workers can't reopen Plesk per-site "
            f"logs (harmless); {benign_tls} client TLS aborts; "
            f"{benign_test} config tests of files outside /etc/nginx")
+if pkg_explained:
+    out.append(f"ℹ️ {len(pkg_explained)} emerg/alert/crit line(s) within {NGINX_PKG_WINDOW.seconds // 60} min of an update of a "
+               f"package that restarts nginx (normal, not counted):")
+    i = 0
+    while i < len(pkg_explained):   # consecutive lines with the same package events share one reason line
+        evs, j = pkg_explained[i][0], i
+        while j < len(pkg_explained) and pkg_explained[j][0] == evs:
+            out.append(f"    {pkg_explained[j][2]:%a %b %d %H:%M:%S} AST  {pkg_explained[j][1]}"); j += 1
+        out.append(f"      <- {len(evs)} package event(s) within {NGINX_PKG_WINDOW.seconds // 60} min, in time order: "
+                   + "; ".join(f"{e[0]:%H:%M:%S} {e[1]} {e[2]} {short_ver(e[3])}" for e in evs))
+        i = j
 sections.append(out)
 
 # ---------------------------------------------------------------- 7. RAM / swap
@@ -635,8 +695,29 @@ out.append(f"{flag}{len(sec)} security updates pending, {len(inst) - len(sec)} o
            + (f" ({', '.join(sorted({l.split()[1] for l in inst if '-security' not in l})[:6])})" if len(inst) > len(sec) else ""))
 flag = warn(f"apt package lists are {lists_age:.1f} days old (apt-daily not refreshing)") if lists_age > 2 else ""
 out.append(f"{flag}package lists refreshed {lists_age * 24:.0f} h ago" if lists_age < 99 else f"{flag}package lists: never refreshed")
-uu_prompt, uu_err, uu_kept, uu_last = set(), [], set(), None
-for l in read_all("/var/log/unattended-upgrades/unattended-upgrades.log*"):
+# RULE B (added 2026-10-28): an ERROR that is "Lock could not be acquired" (another package manager - typically Plesk's
+# installer - held the apt lock) is listed with ℹ️, not counted, ONLY when a later unattended-upgrades run started within
+# 24 h of it finished cleanly: no ERROR/CRITICAL line, and a completion line (UU_DONE_RE). Any other ERROR, and a lock
+# error with no such run, still warns.
+UU_LOG = os.environ.get("CHESS_HR_TEST_UU_GLOB", "/var/log/unattended-upgrades/unattended-upgrades.log*")
+UU_LOCK_RE = re.compile(r"lock\W+could\W*n[o']?t\W+be\W+acquired", re.I)
+UU_DONE_RE = re.compile(r"No packages found that can be upgraded unattended|All upgrades installed|Packages that were upgraded", re.I)
+uu_runs = []   # chronological runs: start time, ERROR/CRITICAL count, completion line seen
+for tl_, lv_, msg_ in sorted((dt.datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").replace(tzinfo=AST), m.group(2), m.group(3))
+                             for m in (re.match(r"(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ (\w+) (.*)", l) for l in read_all(UU_LOG)) if m):
+    if "Starting unattended upgrades script" in msg_:
+        uu_runs.append({"start": tl_, "errors": 0, "done": False})
+    elif uu_runs:
+        if lv_ in ("ERROR", "CRITICAL"): uu_runs[-1]["errors"] += 1
+        if UU_DONE_RE.search(msg_): uu_runs[-1]["done"] = True
+
+
+def uu_clean_run_after(t):
+    return next((r for r in uu_runs if t < r["start"] <= t + dt.timedelta(hours=24) and r["done"] and not r["errors"]), None)
+
+
+uu_prompt, uu_err, uu_kept, uu_last, uu_lock_ok = set(), [], set(), None, []
+for l in read_all(UU_LOG):
     m = re.match(r"(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ (\w+) (.*)", l)
     if not m: continue
     tl = dt.datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").replace(tzinfo=AST)
@@ -644,7 +725,10 @@ for l in read_all("/var/log/unattended-upgrades/unattended-upgrades.log*"):
     if "Starting unattended upgrades script" in m.group(3): uu_last = max(uu_last or tl, tl)
     pm = re.match(r"Package (\S+) has conffile prompt", m.group(3))
     if pm: uu_prompt.add(pm.group(1))
-    if m.group(2) == "ERROR": uu_err.append(m.group(3)[:100])
+    if m.group(2) == "ERROR":
+        clean = uu_clean_run_after(tl) if UU_LOCK_RE.search(m.group(3)) else None
+        if clean: uu_lock_ok.append((tl, m.group(3)[:100], clean["start"]))
+        else: uu_err.append(m.group(3)[:100])
     km = re.match(r"Packages that are kept back: (.+)", m.group(3))
     if km and km.group(1).strip(): uu_kept.update(km.group(1).split())
 flag = warn(f"update(s) SKIPPED because a config file was edited: {', '.join(sorted(uu_prompt))} — upgrade by hand") \
@@ -655,6 +739,9 @@ out.append(f"{flag}unattended-upgrades, last 7 days: {len(uu_prompt)} skipped fo
            + (f"{uu_last:%a %b %d %H:%M} AST" if uu_last else "NOT in the last 7 days"))
 if uu_err:
     warn(f"unattended-upgrades logged {len(uu_err)} ERROR line(s)"); out.append(f"    {uu_err[-1]}")
+for tl, msg, clean_start in uu_lock_ok:
+    out.append(f"ℹ️ unattended-upgrades ERROR {tl:%a %b %d %H:%M} AST: {msg} — another package manager held the apt lock; "
+               f"the next run ({clean_start:%a %b %d %H:%M} AST) finished cleanly (normal, not counted)")
 if not uu_last:
     warn("unattended-upgrades has not run in 7 days")
 q = subprocess.run(["dpkg-query", "-W", "-f=${db:Status-Abbrev}|${Version}", "sw-nginx"], capture_output=True, text=True)
