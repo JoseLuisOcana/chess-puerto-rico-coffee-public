@@ -102,6 +102,10 @@
 #   - Let's Encrypt: ERR/WARN lines from Plesk's letsencrypt/sslit extensions in /var/log/plesk/panel.log (Plesk logs
 #     nothing on a successful renewal), and FAIL lines of the cert drift checker (/var/log/le-cert-renewal-check.log),
 #     last 7 days.
+#   - CHESS VIDEO SCRAPER (added 2026-10-30, owner request): requests per day over the last 7 full AST days from the
+#     disguised residential-proxy scraper on the chess video library (browser User-Agent, no Referer, never loads
+#     CSS/JS/images; robots.txt and fail2ban cannot stop it). Warns when any day is over 50,000, or when a day has no
+#     chess request logged at all. How an address is counted: section 10b.
 #
 # Usage: chess-health-report.sh [--dry-run] [--test] [--label TEXT]
 #   --dry-run     print the report, send nothing
@@ -121,6 +125,8 @@
 # array replacing the live containers of the compose project.
 # Added 2026-10-28 (UPSTREAM): CHESS_HR_TEST_GITHUB_DIR = a directory of JSON files replacing api.github.com: the API
 # path with every "/", "?", "&" and "=" turned into "_", plus ".json" (a missing file = that call fails).
+# Added 2026-10-30 (section 10b): CHESS_HR_TEST_CHESS_ACCESS_GLOB = space-separated glob(s) replacing the chess vhost's
+# access logs (proxy_access_ssl_log + access_ssl_log.processed*).
 
 set -euo pipefail
 if [[ $EUID -ne 0 ]]; then echo "chess-health-report: run as root" >&2; exit 1; fi
@@ -128,7 +134,7 @@ exec 9>/run/lock/chess-health-report.lock
 flock -n 9 || { echo "$(date -u +%FT%TZ) SKIP another run holds the lock" >> /var/log/chess-health-report.log; exit 0; }
 
 exec python3 - "$@" <<'PY'
-import argparse, datetime as dt, glob, gzip, hashlib, json, os, re, shutil, smtplib, socket, ssl, subprocess, sys
+import argparse, datetime as dt, glob, gzip, hashlib, ipaddress, json, os, re, shutil, smtplib, socket, ssl, subprocess, sys
 import urllib.error, urllib.request
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
@@ -1047,6 +1053,80 @@ out.append(f"{flag}drift checker: {len(fails)} FAIL, {sum(' no-op' in l for l in
            + (f"{last.astimezone(AST):%a %b %d %H:%M} AST" if last else "none in 7 days")
            + f"; next {next_drift_check():%a %b %d %H:%M} AST")
 out += [f"    {l[:120]}" for l in fails[-2:]]
+sections.append(out)
+
+# ---------------------------------------------------------------- 10b. chess video-library scraper (added 2026-10-30, owner request)
+# The disguised scraper found by the 2026-10-30 bot report (PANIC-BUTTONS BUTTON 46): tens of thousands of home-ISP
+# addresses (a residential proxy network), each sending one or two requests with an ordinary browser User-Agent and no
+# Referer, never loading the page's CSS/JS/images, almost all to the video library (/video..., /<lang>/video...). It
+# ignores robots.txt and fail2ban cannot see it (one request per address). Week to Oct 30: 61k of its requests, rising
+# from 1.9k to 18k a day; CPU stayed ~2 %. Counted per AST day, last 7 full days, from the chess vhost's access logs
+# (today's proxy_access_ssl_log + Plesk's daily-moved access_ssl_log.processed*, read only if written inside the window).
+# An address counts as the scraper on a day when ALL its requests that day carry a browser User-Agent ("Mozilla/" and
+# no bot/crawler/spider/... word), NONE fetches a static file (/assets/, .css .js images fonts) and at least 90 % have
+# no Referer; its video-library requests that day are the day's count. Real visitors load assets; crawlers name
+# themselves. Warns when a day is over STEALTH_VIDEO_WARN_PER_DAY, and when a day has no chess request logged at all
+# (a silent zero must not look like "no scraping").
+CHESS_ACCESS = (os.environ["CHESS_HR_TEST_CHESS_ACCESS_GLOB"].split() if "CHESS_HR_TEST_CHESS_ACCESS_GLOB" in os.environ else
+                [f"/var/www/vhosts/system/chesspuertoricocoffee.com/logs/{p}"
+                 for p in ("proxy_access_ssl_log", "access_ssl_log.processed", "access_ssl_log.processed.*.gz")])
+STEALTH_VIDEO_WARN_PER_DAY = 50000
+ACCESS_RE = re.compile(r'^(\S+) \S+ \S+ \[(\d\d/\w{3}/\d{4}):[^\]]*\] "\S+ (\S+)[^"]*" \d{3} \S+ "([^"]*)" "([^"]*)"')
+VIDEO_RE = re.compile(r"^/(?:[a-z]{2,3}(?:-[A-Za-z]{2,4})?/)?video(?:/|\?|$)")
+ASSET_RE = re.compile(r"^/assets/|\.(?:css|m?js|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|map)(?:\?|$)", re.I)
+NOT_BROWSER_RE = re.compile(r"bot|crawl|spider|slurp|fetch|preview|scan|monitor|python|curl|wget|headless|http", re.I)
+day_end = now.astimezone(AST).replace(hour=0, minute=0, second=0, microsecond=0)
+days = [day_end - dt.timedelta(days=k) for k in range(7, 0, -1)]
+day_key = {d.strftime("%d/%b/%Y"): d for d in days}
+per = {}                       # (day, ip) -> [requests, video, with referer, assets, non-browser UA]
+day_total = dict.fromkeys(day_key, 0); day_video = dict.fromkeys(day_key, 0)
+files = sorted({p for pat in CHESS_ACCESS for p in glob.glob(pat)})
+for p in files:
+    try:
+        if os.path.getmtime(p) < days[0].timestamp():
+            continue
+        op = gzip.open if p.endswith(".gz") else open
+        with op(p, "rt", errors="replace") as f:
+            for line in f:
+                m = ACCESS_RE.match(line)
+                if not m or m.group(2) not in day_key:
+                    continue
+                ip, d, path, ref, ua = m.groups()
+                try:
+                    a = ipaddress.ip_address(ip)
+                except ValueError:
+                    continue
+                if ip == PROBE_IP or a.is_private or a.is_loopback:   # this server and its Docker network
+                    continue
+                video = bool(VIDEO_RE.match(path))
+                day_total[d] += 1; day_video[d] += video
+                s = per.setdefault((d, ip), [0, 0, 0, 0, 0])
+                s[0] += 1; s[1] += video; s[2] += ref not in ("-", "")
+                s[3] += bool(ASSET_RE.search(path)); s[4] += not ua.startswith("Mozilla/") or bool(NOT_BROWSER_RE.search(ua))
+    except OSError:
+        continue
+out = [f"CHESS VIDEO SCRAPER (disguised bot pool on the video library, requests per day; warns over "
+       f"{STEALTH_VIDEO_WARN_PER_DAY:,} a day)"]
+counts = {}
+for d in day_key:
+    hits = [s for (dd, ip), s in per.items() if dd == d and s[1] and not s[3] and not s[4] and s[2] <= 0.1 * s[0]]
+    n = counts[d] = sum(s[1] for s in hits)
+    flag = ""
+    if not day_total[d]:
+        flag = warn(f"chess video scraper check: no chess request logged on {day_key[d]:%a %b %d}")
+        out.append(f"{flag}{day_key[d]:%a %b %d}: no chess request logged - access log missing or unreadable?")
+        continue
+    if n > STEALTH_VIDEO_WARN_PER_DAY:
+        flag = warn(f"chess video scraper: {n:,} requests on {day_key[d]:%a %b %d} (over {STEALTH_VIDEO_WARN_PER_DAY:,} a day)")
+    pct = f"{100 * n / day_video[d]:.0f} %" if day_video[d] else "-"
+    out.append(f"{flag}{day_key[d]:%a %b %d}: {n:>7,} requests from {len(hits):,} addresses "
+               f"({pct} of {day_video[d]:,} video-library requests; {day_total[d]:,} chess requests in all)")
+logged = [d for d in day_key if day_total[d]]
+if logged:
+    top = max(logged, key=lambda d: counts[d])
+    out.append(f"7-day total {sum(counts.values()):,}; busiest {day_key[top]:%a %b %d} ({counts[top]:,}). Not blocked "
+               f"(robots.txt and fail2ban cannot stop it); option kept in reserve: a shared rate limit for video pages "
+               f"requested with neither a session cookie nor a Referer.")
 sections.append(out)
 
 # ---------------------------------------------------------------- 11-13. (public copy: the checks of other sites on this server are omitted)
