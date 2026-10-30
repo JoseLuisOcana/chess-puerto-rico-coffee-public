@@ -119,8 +119,9 @@ source-disclosure requirements.
   `/favicon.ico` and `/prcoffee/` static assets. `public/robots.txt` is now the
   exact file served (it is returned inline by the vhost).
 - (2026-10) **Crawler rate limiting** (`nginx/conf.d/chess-ratelimit.conf`):
-  crawlers listed in robots.txt are served but rate-limited per crawler and kept
-  off expensive paths. Also published: `nginx/snippets-dotfile-deny.conf`,
+  crawlers listed in robots.txt (and, since 2026-10-30, Reflectionbot and
+  TokenFoundryBot) are served but rate-limited per crawler and kept off expensive
+  paths. Also published: `nginx/snippets-dotfile-deny.conf`,
   `nginx/conf.d/*.conf` (http-context maps) and `nginx/vhost_nginx.conf.prestaging`
   (Plesk pre-staging copy of the vhost; not loaded today).
 - (2026-10) **picfit** (image uploads/thumbnails; `docker/compose.yml`,
