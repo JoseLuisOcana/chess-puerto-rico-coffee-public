@@ -119,12 +119,19 @@ location ~ ^/(socket/|play/|watch/|lobby/socket|api/socket|round-next|analysis/s
         proxy_send_timeout 86400s;
         proxy_buffering off;
 }
+# 2026-10-30 (bot report, BUTTON 44): every group also disallows the video library's tag filters and its
+# non-English/Spanish copies (99% of 79k video crawls/week were those); plain /video + /es/video stay allowed.
 location = /robots.txt {
         default_type text/plain;
         return 200 'User-agent: *
 Allow: /
 Disallow: /opening/*/
 Disallow: /*/opening/*/
+Disallow: /*video*tags=
+Disallow: /*/video/
+Disallow: /*/video?
+Allow: /es/video/
+Allow: /es/video?
 Disallow: /api/
 Disallow: /inbox
 Disallow: /setting
@@ -146,51 +153,101 @@ User-agent: GPTBot
 Allow: /
 Disallow: /opening/*/
 Disallow: /*/opening/*/
+Disallow: /*video*tags=
+Disallow: /*/video/
+Disallow: /*/video?
+Allow: /es/video/
+Allow: /es/video?
 
 User-agent: ChatGPT-User
 Allow: /
 Disallow: /opening/*/
 Disallow: /*/opening/*/
+Disallow: /*video*tags=
+Disallow: /*/video/
+Disallow: /*/video?
+Allow: /es/video/
+Allow: /es/video?
 
 User-agent: Google-Extended
 Allow: /
 Disallow: /opening/*/
 Disallow: /*/opening/*/
+Disallow: /*video*tags=
+Disallow: /*/video/
+Disallow: /*/video?
+Allow: /es/video/
+Allow: /es/video?
 
 User-agent: Claude-Web
 Allow: /
 Disallow: /opening/*/
 Disallow: /*/opening/*/
+Disallow: /*video*tags=
+Disallow: /*/video/
+Disallow: /*/video?
+Allow: /es/video/
+Allow: /es/video?
 
 User-agent: ClaudeBot
 Allow: /
 Disallow: /opening/*/
 Disallow: /*/opening/*/
+Disallow: /*video*tags=
+Disallow: /*/video/
+Disallow: /*/video?
+Allow: /es/video/
+Allow: /es/video?
 
 User-agent: Bingbot
 Allow: /
 Disallow: /opening/*/
 Disallow: /*/opening/*/
+Disallow: /*video*tags=
+Disallow: /*/video/
+Disallow: /*/video?
+Allow: /es/video/
+Allow: /es/video?
 
 User-agent: PerplexityBot
 Allow: /
 Disallow: /opening/*/
 Disallow: /*/opening/*/
+Disallow: /*video*tags=
+Disallow: /*/video/
+Disallow: /*/video?
+Allow: /es/video/
+Allow: /es/video?
 
 User-agent: YouBot
 Allow: /
 Disallow: /opening/*/
 Disallow: /*/opening/*/
+Disallow: /*video*tags=
+Disallow: /*/video/
+Disallow: /*/video?
+Allow: /es/video/
+Allow: /es/video?
 
 User-agent: Applebot-Extended
 Allow: /
 Disallow: /opening/*/
 Disallow: /*/opening/*/
+Disallow: /*video*tags=
+Disallow: /*/video/
+Disallow: /*/video?
+Allow: /es/video/
+Allow: /es/video?
 
 User-agent: cohere-ai
 Allow: /
 Disallow: /opening/*/
 Disallow: /*/opening/*/
+Disallow: /*video*tags=
+Disallow: /*/video/
+Disallow: /*/video?
+Allow: /es/video/
+Allow: /es/video?
 
 Sitemap: https://chesspuertoricocoffee.com/sitemap.xml
 ';

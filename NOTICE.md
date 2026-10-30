@@ -92,6 +92,8 @@ source-disclosure requirements.
   domain, plus a parallel system config file required by Plesk.
 - **robots.txt** (`public/robots.txt`): Changed from upstream default
   `Disallow: /` to `Allow: /` for public search-engine indexing.
+  Since 2026-10-30 every group also disallows the video library's tag-filter
+  URLs and its copies in languages other than English and Spanish.
 - **sitemap.xml** (`public/sitemap.xml`): Custom sitemap created for
   search indexing.
 - **compose.yml** / **compose-search.yml** (`docker/`): Environment
