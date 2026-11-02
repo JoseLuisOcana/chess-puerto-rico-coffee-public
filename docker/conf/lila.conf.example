@@ -39,7 +39,9 @@ mailer.primary.sender   = "Chess Puerto Rico Coffee <system@chesspuertoricocoffe
 security.email_confirm.enabled = true
 
 push.firebase.mobile.url = "https://fcm.googleapis.com/v1/projects/lichess-testing-df65f/messages:send"
-push.firebase.mobile.jsonPath = "/opt/firebase-service-account.json"
+# No Firebase credentials on this site (conf/firebase-service-account.json is only an empty directory that docker
+# created), so mobile push is off. Empty = the upstream default = off, and it avoids a startup warning.
+push.firebase.mobile.jsonPath = ""
 push.web.url = "http://lila_push:9054"
 push.web.vapid_public_key = "BDTVzVZ3_f83JgH1SJmZrhg-FNZ36Sixc_zrR1-1ZGVHUPmFeU6Q_-JQLN8NF5niYW_1jRU47aPczYA0FbgUCus="
 

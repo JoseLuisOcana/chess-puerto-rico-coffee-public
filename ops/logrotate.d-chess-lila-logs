@@ -1,0 +1,14 @@
+# 2026-10-02: lila dev-mode logs. conf/logger.dev.xml uses plain logback FileAppenders
+# (no rolling), so these grew unbounded since 2026-04-06 (850M + 281M).
+# copytruncate is REQUIRED: the lila JVM holds both files open; it opened them O_APPEND
+# (verified via /proc fdinfo), so it keeps writing at the new EOF after truncation.
+# maxsize: rotate early (on the daily logrotate.timer run) if a file passes 100M.
+/opt/chess/lila-docker/repos/lila/logs/*.log {
+    weekly
+    rotate 4
+    maxsize 100M
+    compress
+    copytruncate
+    missingok
+    notifempty
+}

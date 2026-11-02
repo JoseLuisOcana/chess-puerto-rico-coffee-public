@@ -223,6 +223,12 @@ source-disclosure requirements.
   computer — creates an anonymous game through the normal setup form, plays it over
   the same WebSocket a browser uses, waits for the engine's move and aborts the game.
   Standard library only.
+- **ops/chess-bgjobs-cleanup.sh** + cron, and **ops/logrotate.d-chess-lila-logs** (2026-10):
+  housekeeping. Weekly, the script deletes stale sbt classpath copies (`target/bg-jobs/sbt_*`, ~175 MB
+  each) left behind by lila / lila-fishnet restarts; it keeps every folder a running process still uses
+  and deletes nothing if it cannot find one in use (`--dry-run` available). The logrotate rule rotates
+  lila's dev-mode log files weekly (copytruncate, early at 100 MB), which upstream's non-rolling logback
+  file appenders would otherwise grow without limit.
 - **contact-api/** (2026-10): the small Node.js contact-form backend
   (`server.js`, sends via authenticated SMTP; credentials come from an
   environment file that is not published; recipient address sanitized).
