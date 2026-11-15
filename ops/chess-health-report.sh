@@ -17,7 +17,7 @@
 #     than Plesk's more than 3.5 days after Plesk renewed (the drift checker runs every 3 days, 13:00 AST, days 1,4,7…;
 #     inside that grace it is listed, not flagged). Lists every certificate Plesk renewed in the last 7 days.
 #   - last REAL run of each cron (dry-runs are ignored): result, and age against its schedule
-#       puzzle recycle 04:15 daily (26 h), mongodump 03:30 daily (26 h), auto-feed Mon+Thu 08:00 (4.5 days),
+#       puzzle recycle 04:15 daily (26 h), mongodump 01:15 daily (26 h), auto-feed Mon+Thu 08:00 (4.5 days),
 #       video refresh Sun 07:00 (8 days), bgjobs cleanup Sun 04:45 (8 days)
 #   - versions of the chess stack (lila commit + local commits, lila-fishnet, lila-ws image, fishnet, mongo/redis), informational
 #   - UPSTREAM (added 2026-10-28, owner request): read-only — GitHub's public REST API only (unauthenticated, 60 calls an
@@ -192,7 +192,7 @@ def iso(s):
 
 # ---------------------------------------------------------------- 1. mongodump
 lines = [l for l in tail_lines("/var/log/chess-mongodump.log") if re.match(r"\d{4}-\d\d-\d\dT", l)]
-out = ["BACKUP (nightly mongodump, 03:30)"]
+out = ["BACKUP (nightly mongodump, 01:15)"]
 if not lines:
     out.append(warn("no mongodump log line found") + "no run logged")
 else:
