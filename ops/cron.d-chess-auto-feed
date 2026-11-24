@@ -1,9 +1,11 @@
 # /etc/cron.d/chess-auto-feed
 #
-# 2026-10-03: posts ONE real-data item to the homepage feed (daily_feed) every Monday and
+# 2026-10-03: builds ONE real-data item for the homepage feed (daily_feed) every Monday and
 # Thursday at 08:00 AST — the server TZ is America/Puerto_Rico (no DST), so 08:00 here IS
 # 08:00 AST — and keeps only the newest 5 posts public (older ones public:false, never
 # deleted). Skips the run when there is nothing new to say. See /usr/local/bin/chess-auto-feed.sh.
+# Since 2026-11-24 (BUTTON 234, owner) the item is only a DRAFT that waits for the owner's approval
+# (sudo chess-approve) - nothing is published automatically.
 #
 # Silent on success and on a normal skip (log: /var/log/chess-auto-feed.log); cron mails on error.
 

@@ -19,6 +19,8 @@
 #   - last REAL run of each cron (dry-runs are ignored): result, and age against its schedule
 #       puzzle recycle 04:15 daily (26 h), mongodump 01:15 daily (26 h), auto-feed Mon+Thu 08:00 (4.5 days),
 #       video refresh Sun 07:00 (8 days), bgjobs cleanup Sun 04:45 (8 days)
+#     The video refresh is PAUSED since 2026-11-24 (BUTTON 234): while /etc/cron.d/chess-video-refresh has no active
+#     schedule line it is listed with ℹ️ PAUSED and its age is not flagged (an ERROR in its last run still warns).
 #   - versions of the chess stack (lila commit + local commits, lila-fishnet, lila-ws image, fishnet, mongo/redis), informational
 #   - UPSTREAM (added 2026-10-28, owner request): read-only — GitHub's public REST API only (unauthenticated, 60 calls an
 #     hour per IP; a run makes 7) plus local read-only git; nothing is fetched or pulled. (1) Security advisories of
@@ -34,6 +36,10 @@
 #   - BLOG APPROVAL (added 2026-10-08): lists published blog posts nobody has rated yet. They stay out of the community
 #     list and blog search until a moderator clicks Weak or Good on the post page (Spam = reject). Each
 #     waiting post is an attention item, with its link.
+#   - NEWS + VIDEOS AWAITING APPROVAL (added 2026-11-24, BUTTON 234): since then nothing is published automatically.
+#     Lists the news draft in /var/lib/chess-auto-feed/draft.json and the videos on the waiting list
+#     /var/lib/chess-video-refresh/pending.json (both written by the jobs, root only). Each waiting item is an attention
+#     item; the owner decides with `sudo chess-approve`. A file that cannot be read warns too.
 #   - SEARCH (added 2026-10-08 with the search-index rebuild): runs the read-only check of
 #     /usr/local/sbin/chess-search-rebuild.sh — Elasticsearch green, the auto-create guard set, all five indexes present
 #     with lila-search's real mappings and document counts equal to MongoDB, search containers running; warns per FAIL.
@@ -328,7 +334,23 @@ def tagged_run(path, max_age_h, name, ok_rx, fail_rx):
 
 
 out.append(tagged_run("/var/log/chess-auto-feed.log", 4.5 * 24, "news auto-feed", r" RUN (OK|SKIP) ", r" RUN ERROR "))
-out.append(tagged_run("/var/log/chess-video-refresh.log", 8 * 24, "video refresh", r" RUN OK ", r" RUN ERROR "))
+def cron_active(path, script):
+    """True when the cron file has an uncommented line that runs `script` (BUTTON 234: a paused job has none)."""
+    try:
+        return any(re.match(r"\s*[^#\s]", l) and script in l for l in open(path, encoding="utf-8"))
+    except OSError:
+        return True   # unreadable: judge the job as scheduled (the age check stays on)
+
+
+if cron_active("/etc/cron.d/chess-video-refresh", "/usr/local/bin/chess-video-refresh.sh"):
+    out.append(tagged_run("/var/log/chess-video-refresh.log", 8 * 24, "video refresh", r" RUN OK ", r" RUN ERROR "))
+else:   # paused on purpose (BUTTON 234): no age warning; the last run's result still counts
+    vr = [x for x in tail_lines("/var/log/chess-video-refresh.log") if re.match(r"\d{4}-\d\d-\d\dT\S+ RUN ", x)]
+    vt = iso(vr[-1].split()[0]) if vr else None
+    vfail = [x for x in vr if vt and (vt - iso(x.split()[0])).total_seconds() <= 900 and " RUN ERROR " in x]
+    out.append((warn(f"video refresh: last run failed") if vfail else "ℹ️ ") + f"{'video refresh':22} PAUSED (BUTTON 234, "
+               "no schedule line in /etc/cron.d/chess-video-refresh) — last run "
+               + (f"{vt.astimezone(AST):%a %b %d %H:%M} AST ({age_txt(vt)})" if vt else "never"))
 # bgjobs: "YYYY-MM-DD HH:MM:SS AST ..." local time; dry-run lines carry "[dry-run] "
 bl = [x for x in tail_lines("/var/log/chess-bgjobs-cleanup.log") if re.match(r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d", x) and "[dry-run]" not in x]
 end = [x for x in bl if re.search(r" (done:|SKIP:)", x)]
@@ -742,6 +764,39 @@ for w in waiting or []:
     out.append(warn(f"blog post awaits approval: {w.get('title', '?')[:50]}") +
                f"{str(w.get('lived', {}).get('at', '?'))[:10]}  {w.get('title', '?')[:50]} by {w.get('created', {}).get('by', '?')}"
                f" -> https://chesspuertoricocoffee.com/ublog/{w['_id']}/redirect")
+sections.append(out)
+
+# ---------------------------------------------------------------- 5e. news + videos awaiting approval (added 2026-11-24, BUTTON 234)
+out = ["NEWS + VIDEOS AWAITING APPROVAL (nothing is published automatically; see and decide with: sudo chess-approve)"]
+for label, path, key in (("news draft", "/var/lib/chess-auto-feed/draft.json", None),
+                         ("videos", "/var/lib/chess-video-refresh/pending.json", "videos")):
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        out.append(f"{label}: none waiting"); continue
+    except (OSError, ValueError) as e:
+        out.append(warn(f"approval list unreadable: {path}") + f"{label}: cannot read {path} ({type(e).__name__})"); continue
+    if key is None:   # one news draft
+        if not (isinstance(data, dict) and isinstance(data.get("_id"), str) and isinstance(data.get("content"), str)):
+            out.append(warn(f"approval list unreadable: {path}") + f"{label}: {path} is not a draft"); continue
+        first = " ".join(data["content"].split())[:90]
+        out.append(warn(f"news draft awaits approval: {data['_id']}") +
+                   f"news draft {data['_id']} (written {str(data.get('at', '?'))[:10]}): {first}… "
+                   f"-> sudo chess-approve news {data['_id']}")
+        continue
+    vids = data.get("videos") if isinstance(data, dict) else None
+    if not isinstance(vids, list):
+        out.append(warn(f"approval list unreadable: {path}") + f"{label}: {path} is not a waiting list"); continue
+    if not vids:
+        out.append("videos: none waiting")
+    for x in vids:
+        d = x.get("doc", {}) if isinstance(x, dict) else {}
+        out.append(warn(f"video awaits approval: {d.get('title', '?')[:50]}") +
+                   f"video {x.get('id', '?') if isinstance(x, dict) else '?'} found {str(x.get('foundAt', '?'))[:10] if isinstance(x, dict) else '?'}"
+                   f"  {str(d.get('author', '?'))[:30]}: {str(d.get('title', '?'))[:60]}")
+    if vids:
+        out.append(f"   -> sudo chess-approve video <id> ... / reject-video <id> ... (each drops off by itself after 28 days)")
 sections.append(out)
 
 # ---------------------------------------------------------------- 6. errors, last 7 days

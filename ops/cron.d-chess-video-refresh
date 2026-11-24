@@ -1,9 +1,15 @@
 # /etc/cron.d/chess-video-refresh
 #
 # 2026-10-03: weekly refresh of the homepage "Chess Videos" strip - Sundays 07:00 AST (the server TZ is
-# America/Puerto_Rico, no DST). Adds new long-form videos ONLY from the channels in
-# /etc/chess-video-channels.json (max 5 per channel per week), rewrites
+# America/Puerto_Rico, no DST). Looks for new long-form videos ONLY from the channels in
+# /etc/chess-video-channels.json (max 2 per channel per week), rewrites
 # httpdocs/prcoffee/videos.json and the local thumbnails. See /usr/local/bin/chess-video-refresh.sh.
+# Since 2026-11-24 (BUTTON 234) new videos only go on a WAITING LIST: nothing reaches /video or the homepage
+# until the owner approves it (sudo chess-approve).
+#
+# PAUSED 2026-11-24 (BUTTON 234, owner; Codex chess review finding 01: this root job writes into the site's own
+# folders). The schedule line at the end is commented out on purpose; the homepage keeps the 4 videos it shows.
+# Undo: PANIC-BUTTONS BUTTON 234.
 #
 # Silent on success (log: /var/log/chess-video-refresh.log); cron mails on error.
 
@@ -11,4 +17,4 @@ SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 MAILTO=admin@example.com   # sanitized: set your admin address
 
-0 7 * * 0 root /usr/local/bin/chess-video-refresh.sh
+#PAUSED-BUTTON-234# 0 7 * * 0 root /usr/local/bin/chess-video-refresh.sh

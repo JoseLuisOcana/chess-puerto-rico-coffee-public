@@ -1,0 +1,37 @@
+#!/bin/bash
+# chess-approve — the owner's approval of new homepage News drafts and new videos on chesspuertoricocoffee.com
+# Added 2026-11-24 (BUTTON 234, owner): since then nothing is published automatically. The Monday/Thursday news job
+# writes a DRAFT and the weekly video job (paused since the same day) puts new videos on a WAITING LIST; only this
+# command publishes them. It only calls the two jobs' own approval modes, which take the same lock as the jobs.
+#
+#   sudo chess-approve                              show everything that waits (news draft text + video list)
+#   sudo chess-approve news auto-YYYYMMDD           publish the news draft on the homepage
+#   sudo chess-approve reject-news auto-YYYYMMDD    drop the news draft (a copy is kept in /var/backups/chess-auto-feed/)
+#   sudo chess-approve video <id> [<id> ...]        add videos to the /video library (YouTube is asked again first)
+#   sudo chess-approve reject-video <id> [<id> ...] drop videos from the waiting list (never proposed again)
+#
+# Logs: /var/log/chess-auto-feed.log, /var/log/chess-video-refresh.log. Undo BUTTON 234: PANIC-BUTTONS BUTTON 234.
+set -uo pipefail
+FEED=/usr/local/bin/chess-auto-feed.sh
+VIDEO=/usr/local/bin/chess-video-refresh.sh
+usage() {
+  sed -n '7,11p' "$0" | sed 's/^#  //' >&2
+  exit 2
+}
+[ "$(id -u)" = 0 ] || { echo "chess-approve: run it with sudo" >&2; exit 1; }
+cmd=${1:-list}
+[ $# -gt 0 ] && shift
+case "$cmd" in
+  list)
+    [ $# -eq 0 ] || usage
+    "$FEED" --list-waiting; a=$?
+    echo
+    "$VIDEO" --list-waiting; b=$?
+    [ $a -eq 0 ] && [ $b -eq 0 ];;
+  news)         [ $# -eq 1 ] || usage; exec "$FEED" --approve -- "$1";;
+  reject-news)  [ $# -eq 1 ] || usage; exec "$FEED" --reject -- "$1";;
+  video)        [ $# -ge 1 ] || usage; exec "$VIDEO" --approve -- "$@";;
+  reject-video) [ $# -ge 1 ] || usage; exec "$VIDEO" --reject -- "$@";;
+  -h|--help|help) usage;;
+  *) echo "chess-approve: unknown command '$cmd' - nothing changed" >&2; usage;;
+esac

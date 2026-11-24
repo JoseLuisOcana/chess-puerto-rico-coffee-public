@@ -35,6 +35,8 @@ source-disclosure requirements.
   violent words, "mate" puns, with real chess terms allowed - and YouTube must report the video as
   embeddable and not age-restricted) and serves thumbnails locally. Thumbnails and `videos.json` are
   generated data (the thumbnails belong to the video creators) and are not part of this repository.
+  Since 2026-11-24 new videos only go on a waiting list and enter the library after the operator approves
+  each one with `ops/chess-approve` (YouTube is asked again first); the weekly job is paused on this deployment.
 - (2026-10) **Sign-up age confirmation:** a required checkbox "I am 13 or older (or have parental
   consent)." is added to lila's sign-up form by the nginx branding snippet (`sub_filter` at the end of the
   agreement checkboxes, only on `/signup`); `public/static/prcoffee/signup.js` re-adds it if the anchor ever
@@ -182,8 +184,10 @@ source-disclosure requirements.
   verification (`chess-mongodump.sh` + cron), and the contact-form service unit
   with its SMTP drop-in. E-mail addresses are sanitized.
 - **ops/chess-auto-feed.sh** (2026-10): keeps the homepage news feed (`daily_feed`)
-  current — twice a week (cron included) it posts one item built only from real data
-  through a fixed template: the top 1–2 official broadcasts of the week from
+  current — twice a week (cron included) it builds one item only from real data
+  through a fixed template. Since 2026-11-24 that item is a DRAFT kept outside lila's database (lila's public
+  `/api/feed` also lists non-public feed posts); it is published only when the operator approves it with
+  `ops/chess-approve`. The template: the top 1–2 official broadcasts of the week from
   lichess.org's public API (one request per run, identified User-Agent, no personal
   names), the site's own game/tournament/new-player counts, and the next scheduled
   tournament. It skips runs with nothing new, never deletes posts (older ones are set
