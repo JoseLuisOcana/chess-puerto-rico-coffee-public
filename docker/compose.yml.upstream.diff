@@ -1,5 +1,5 @@
 diff --git a/compose.yml b/compose.yml
-index bda4f5a..5d005fa 100644
+index bda4f5a..578d1d3 100644
 --- a/compose.yml
 +++ b/compose.yml
 @@ -5,10 +5,15 @@ include:
@@ -228,7 +228,7 @@ index bda4f5a..5d005fa 100644
      profiles:
        - stockfish-analysis
    python:
-@@ -231,26 +311,31 @@ services:
+@@ -231,37 +311,47 @@ services:
      profiles:
        - utils
    lila_gif:
@@ -266,7 +266,11 @@ index bda4f5a..5d005fa 100644
      volumes:
        - ./repos/lila-push:/lila-push
        - ./conf/private.pem:/lila-push/private.pem
-@@ -260,8 +345,11 @@ services:
+     profiles:
+       - push
+   picfit:
++    # 2026-11-25 (BUTTON 239): the image built from docker/picfit.Dockerfile with Go 1.26.11 + Alpine 3.24.4
++    image: lila-docker-picfit:b239-go1.26.11
      build:
        context: docker
        dockerfile: picfit.Dockerfile
@@ -280,7 +284,7 @@ index bda4f5a..5d005fa 100644
      volumes:
        - ./conf/picfit.json:/mnt/config.json
        - ./docker/assets:/uploads
-@@ -271,7 +359,10 @@ services:
+@@ -271,7 +361,10 @@ services:
      image: axllent/mailpit:v1.27.7
      restart: unless-stopped
      ports:
@@ -292,7 +296,7 @@ index bda4f5a..5d005fa 100644
      profiles:
        - email
    mongo_express_primary:
-@@ -309,10 +400,28 @@ services:
+@@ -309,10 +402,28 @@ services:
      profiles:
        - monitoring
  

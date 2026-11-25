@@ -342,6 +342,8 @@ services:
     profiles:
       - push
   picfit:
+    # 2026-11-25 (BUTTON 239): the image built from docker/picfit.Dockerfile with Go 1.26.11 + Alpine 3.24.4
+    image: lila-docker-picfit:b239-go1.26.11
     build:
       context: docker
       dockerfile: picfit.Dockerfile

@@ -1,0 +1,20 @@
+diff --git a/docker/picfit.Dockerfile b/docker/picfit.Dockerfile
+index 7fcb254..7efdc6a 100644
+--- a/docker/picfit.Dockerfile
++++ b/docker/picfit.Dockerfile
+@@ -1,5 +1,5 @@
+ # Build stage
+-FROM golang:1.25.1-alpine3.22 AS build
++FROM golang:1.26.11-alpine3.24 AS build
+ 
+ RUN apk --no-cache add g++ gcc make \
+     && wget https://github.com/thoas/picfit/archive/refs/tags/0.15.1.zip \
+@@ -11,7 +11,7 @@ WORKDIR /picfit
+ RUN make build
+ 
+ # Runtime stage
+-FROM alpine:3.22.1
++FROM alpine:3.24.4
+ 
+ COPY --from=build /picfit/bin/picfit /picfit
+ 
