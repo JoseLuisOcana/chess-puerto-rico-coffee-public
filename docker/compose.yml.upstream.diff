@@ -1,5 +1,5 @@
 diff --git a/compose.yml b/compose.yml
-index bda4f5a..f1ff6ec 100644
+index bda4f5a..a6d9118 100644
 --- a/compose.yml
 +++ b/compose.yml
 @@ -5,39 +5,53 @@ include:
@@ -209,7 +209,7 @@ index bda4f5a..f1ff6ec 100644
 +      - build
    fishnet_play:
 -    image: niklasf/fishnet:2.12.0
-+    image: niklasf/fishnet:2.15.0
++    image: niklasf/fishnet:2.15.1
      restart: unless-stopped
      environment:
        - ENDPOINT=http://lila_fishnet:9665/fishnet
@@ -221,7 +221,7 @@ index bda4f5a..f1ff6ec 100644
        - stockfish-play
    fishnet_analysis:
 -    image: niklasf/fishnet:2.12.0
-+    image: niklasf/fishnet:2.15.0
++    image: niklasf/fishnet:2.15.1
      restart: unless-stopped
      environment:
        - ENDPOINT=http://lila:9663/fishnet

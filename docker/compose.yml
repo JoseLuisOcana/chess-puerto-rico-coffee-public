@@ -264,7 +264,7 @@ services:
     profiles:
       - build
   fishnet_play:
-    image: niklasf/fishnet:2.15.0
+    image: niklasf/fishnet:2.15.1
     restart: unless-stopped
     environment:
       - ENDPOINT=http://lila_fishnet:9665/fishnet
@@ -274,7 +274,7 @@ services:
     profiles:
       - stockfish-play
   fishnet_analysis:
-    image: niklasf/fishnet:2.15.0
+    image: niklasf/fishnet:2.15.1
     restart: unless-stopped
     environment:
       - ENDPOINT=http://lila:9663/fishnet

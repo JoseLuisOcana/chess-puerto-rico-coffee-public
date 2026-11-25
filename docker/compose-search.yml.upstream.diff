@@ -1,5 +1,5 @@
 diff --git a/compose-search.yml b/compose-search.yml
-index 62447c7..096f7d7 100644
+index 62447c7..bfd3052 100644
 --- a/compose-search.yml
 +++ b/compose-search.yml
 @@ -1,17 +1,22 @@
@@ -42,7 +42,7 @@ index 62447c7..096f7d7 100644
 -    image: ghcr.io/lichess-org/lila-search-app:latest
 +    # 2026-10-08: pinned to lila-search 3.6.0 (= the search client our lila uses). Was :latest = 3.4.3, whose
 +    # ingestor never saw a blog post's rating/date. Bump deliberately; then `sudo chess-search-rebuild.sh --rebuild`.
-+    image: ghcr.io/lichess-org/lila-search-app:3.6.0@sha256:1d4ab5729b5c0b9a0bfefc4bcf98e63077c14f62bffdc1bc564e397954a3d3de
++    image: ghcr.io/lichess-org/lila-search-app:3.6.2@sha256:cbab4367ceca7b3ee384ff269109c8976c30f2a07c93492321aa3be9b7bdca58
      volumes:
        - ./conf/lila-search-logback.xml:/opt/config/logback.xml
      environment:
@@ -53,7 +53,7 @@ index 62447c7..096f7d7 100644
 -    image: ghcr.io/lichess-org/lila-search-ingestor-app:latest
 +    # 2026-10-08: pinned to lila-search 3.6.0 (= the search client our lila uses). Was :latest = 3.4.3, whose
 +    # ingestor never saw a blog post's rating/date. Bump deliberately; then `sudo chess-search-rebuild.sh --rebuild`.
-+    image: ghcr.io/lichess-org/lila-search-ingestor-app:3.6.0@sha256:9b19cbfafdc615554e43e9f7c7d92b72ff3150517b0657d06c70de65ab720cc4
++    image: ghcr.io/lichess-org/lila-search-ingestor-app:3.6.2@sha256:81a6c4c2c29dace00f193497a1e9850437698c5246980f9018a94156ea109813
      volumes:
        - ./conf/lila-search-logback.xml:/opt/config/logback.xml
      environment:
@@ -82,7 +82,7 @@ index 62447c7..096f7d7 100644
 -    image: ghcr.io/lichess-org/lila-search-ingestor-cli:latest
 +    # 2026-10-08: pinned to lila-search 3.6.0 (= the search client our lila uses). Was :latest = 3.4.3, whose
 +    # ingestor never saw a blog post's rating/date. Bump deliberately; then `sudo chess-search-rebuild.sh --rebuild`.
-+    image: ghcr.io/lichess-org/lila-search-ingestor-cli:3.6.0@sha256:e73c02ef6ea8258159b7e62073f77bd4bb0404fc8f37e1961c026f4a3a1ece81
++    image: ghcr.io/lichess-org/lila-search-ingestor-cli:3.6.2@sha256:f08a65bd9a24c990d82a7052ddeec5da3c5675d8a042edfca825b1847b246336
      volumes:
        - ./conf/lila-search-logback.xml:/opt/config/logback.xml
      environment:
