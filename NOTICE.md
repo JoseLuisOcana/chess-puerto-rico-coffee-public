@@ -326,8 +326,9 @@ consult the docker-compose image tags in `docker/compose.yml`.
 
 Deployed since 2026-11-25: lila `eb024cba` (+ the modifications above), lila-ws image pinned by
 digest in `docker/compose-lila-ws-image.yml` (the 2026-11-22 upstream CI image, built from lila-ws
-`257e811`), lila-fishnet `3837bbc`, fishnet `2.15.0`, lila-docker upstream `f1e918c` merged with this
-site's compose changes (`docker/*.upstream.diff`). Before 2026-11-25: lila `f5b261e` (2026-10-08) and the
+`257e811`), lila-fishnet `3837bbc`, fishnet `2.15.1`, lila-docker upstream `f1e918c` merged with this
+site's compose changes (`docker/*.upstream.diff`). Container images patched 2026-11-25 (security releases, same major versions): Caddy 2.11.9, Redis 8.2.11,
+MongoDB 7.0.48, Elasticsearch 7.17.28, lila-search 3.6.2, picfit 0.15.1 rebuilt with Go 1.26.11 (`docker/picfit.Dockerfile`). Before 2026-11-25: lila `f5b261e` (2026-10-08) and the
 2026-10-06 lila-ws image.
 
 ---
