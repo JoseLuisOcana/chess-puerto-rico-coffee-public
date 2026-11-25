@@ -48,7 +48,7 @@ services:
     profiles:
       - base
   redis:
-    image: redis:8.0.3-alpine3.21
+    image: redis:8.2.11-alpine3.22
     restart: unless-stopped
     volumes:
       - redis_data:/data

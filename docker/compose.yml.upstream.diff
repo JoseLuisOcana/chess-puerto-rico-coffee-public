@@ -1,5 +1,5 @@
 diff --git a/compose.yml b/compose.yml
-index bda4f5a..578d1d3 100644
+index bda4f5a..435d2b4 100644
 --- a/compose.yml
 +++ b/compose.yml
 @@ -5,10 +5,15 @@ include:
@@ -59,7 +59,8 @@ index bda4f5a..578d1d3 100644
      profiles:
        - base
    redis:
-     image: redis:8.0.3-alpine3.21
+-    image: redis:8.0.3-alpine3.21
++    image: redis:8.2.11-alpine3.22
      restart: unless-stopped
 +    volumes:
 +      - redis_data:/data
