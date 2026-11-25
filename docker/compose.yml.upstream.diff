@@ -1,8 +1,8 @@
 diff --git a/compose.yml b/compose.yml
-index bda4f5a..435d2b4 100644
+index bda4f5a..f1ff6ec 100644
 --- a/compose.yml
 +++ b/compose.yml
-@@ -5,10 +5,15 @@ include:
+@@ -5,39 +5,53 @@ include:
  
  services:
    openingexplorer:
@@ -19,9 +19,11 @@ index bda4f5a..435d2b4 100644
      volumes:
        - openingexplorer-data:/app/_db
      environment:
-@@ -17,27 +22,36 @@ services:
+       - LILA_URL=http://caddy
+       - EXPLORER_BEARER=lip_openingexplorer
    mongodb:
-     image: mongo:7.0.28-jammy
+-    image: mongo:7.0.28-jammy
++    image: mongo:7.0.48-jammy
      restart: unless-stopped
 -    command: mongod --bind_ip_all --replSet rs0
 +    command: mongod --bind_ip_all --replSet rs0 --wiredTigerCacheSizeGB 2

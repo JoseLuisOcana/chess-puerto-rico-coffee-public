@@ -20,7 +20,7 @@ services:
       - LILA_URL=http://caddy
       - EXPLORER_BEARER=lip_openingexplorer
   mongodb:
-    image: mongo:7.0.28-jammy
+    image: mongo:7.0.48-jammy
     restart: unless-stopped
     command: mongod --bind_ip_all --replSet rs0 --wiredTigerCacheSizeGB 2
     stop_grace_period: 60s
