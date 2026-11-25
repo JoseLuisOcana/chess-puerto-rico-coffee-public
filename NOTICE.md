@@ -128,11 +128,11 @@ source-disclosure requirements.
   paths. Also published: `nginx/snippets-dotfile-deny.conf`,
   `nginx/conf.d/*.conf` (http-context maps) and `nginx/vhost_nginx.conf.prestaging`
   (Plesk pre-staging copy of the vhost; not loaded today).
-- (2026-11) **Temporary security blocks** (`nginx/conf.d/chess-security-blocks.conf` + two server-level rules in
-  the vhost): until this deployment upgrades lila and lila-ws, websocket connections to Puzzle Racer (`/racer/...`)
-  are refused (upstream advisory GHSA-2rpf-mmrc-v68p), and every write under `/broadcast/`, `/api/broadcast/` and
-  `/upload/image/broadcast/` is refused (GHSA-582f-w2m6-pr6m; this deployment runs lila in development mode, where
-  upstream's fix does not apply).
+- (2026-11) **Security block** (`nginx/conf.d/chess-security-blocks.conf` + a server-level rule in the vhost):
+  every write under `/broadcast/`, `/api/broadcast/` and `/upload/image/broadcast/` is refused (GHSA-582f-w2m6-pr6m;
+  this deployment runs lila in development mode, where upstream's fix does not apply). A second block, refusing
+  websocket connections to Puzzle Racer (`/racer/...`, GHSA-2rpf-mmrc-v68p), was in place from 2026-11-24 until
+  2026-11-25, when the upgraded lila and lila-ws carrying the fix went live; it has been removed.
 - (2026-10) **picfit** (image uploads/thumbnails; `docker/compose.yml`,
   `docker/conf/picfit.json.example`): host port publication removed (picfit is
   reached only over the internal Docker network) and `restart: unless-stopped`
