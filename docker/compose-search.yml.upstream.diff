@@ -1,8 +1,16 @@
 diff --git a/compose-search.yml b/compose-search.yml
-index 62447c7..96780eb 100644
+index 62447c7..096f7d7 100644
 --- a/compose-search.yml
 +++ b/compose-search.yml
-@@ -8,10 +8,15 @@ services:
+@@ -1,17 +1,22 @@
+ ---
+ services:
+   elasticsearch:
+-    image: elasticsearch:7.17.4
++    image: elasticsearch:7.17.28
+     restart: unless-stopped
+     environment:
+       - discovery.type=single-node
        - http.cors.allow-origin=/.*/
        - http.cors.enabled=true
        - xpack.security.enabled=false
