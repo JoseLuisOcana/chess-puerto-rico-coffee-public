@@ -37,6 +37,10 @@ source-disclosure requirements.
   generated data (the thumbnails belong to the video creators) and are not part of this repository.
   Since 2026-11-24 new videos only go on a waiting list and enter the library after the operator approves
   each one with `ops/chess-approve` (YouTube is asked again first); the weekly job is paused on this deployment.
+- (2026-11) **Secrets on the server:** `ops/chess-secret-set` changes the mail password or the opening-explorer
+  token everywhere the deployment keeps it (asked twice with hidden typing, tested first, never shown, never logged,
+  never on a command line). `ops/chess-argv-watch` + `ops/chess-argv-watch.service` warn the operator when one of the
+  deployment's secrets appears on any process's command line (the name of the secret only, never its value).
 - (2026-10) **Sign-up age confirmation:** a required checkbox "I am 13 or older (or have parental
   consent)." is added to lila's sign-up form by the nginx branding snippet (`sub_filter` at the end of the
   agreement checkboxes, only on `/signup`); `public/static/prcoffee/signup.js` re-adds it if the anchor ever

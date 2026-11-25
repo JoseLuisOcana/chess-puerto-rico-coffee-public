@@ -1,0 +1,28 @@
+[Unit]
+Description=Chess: warn when a chess secret shows up on a process's command line (BUTTON 245)
+Documentation=file:///usr/local/sbin/chess-argv-watch
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -I /usr/local/sbin/chess-argv-watch
+Restart=always
+RestartSec=10
+Nice=10
+IOSchedulingClass=idle
+StateDirectory=chess-argv-watch
+StateDirectoryMode=0700
+ProtectSystem=strict
+ReadWritePaths=/var/log/chess-argv-watch.log
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+MemoryMax=200M
+SyslogIdentifier=chess-argv-watch
+
+[Install]
+WantedBy=multi-user.target

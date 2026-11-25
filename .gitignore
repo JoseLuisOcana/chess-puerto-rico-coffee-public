@@ -3,6 +3,8 @@
 *.key
 *.pem
 *secret*
+# the one exception (2026-11-25): the script that SETS secrets on the server - it holds none
+!ops/chess-secret-set
 *password*
 
 # Large datasets (not for a public repo — re-downloadable from source)

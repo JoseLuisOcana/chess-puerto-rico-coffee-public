@@ -1,0 +1,375 @@
+#!/usr/bin/python3 -I
+"""chess-argv-watch - warns when a chess secret shows up in the process list (BUTTON 245, 2026-11-25).
+
+Why: any account on this server can read every process's command line (/proc/<pid>/cmdline). On 2026-11-24 two
+preparation runs put live chess secrets on a command line for a few seconds. This watcher looks at every new process
+4 times a second (and at all of them every 15 s) and compares its command line with the chess secrets, in memory.
+
+On a hit it writes ONE line - the secret's NAME, the process name, its user and PID, never the value or the command
+line - to /var/log/chess-argv-watch.log and the journal, and e-mails system@chesspuertoricocoffee.com (at most one
+e-mail every 6 hours; the same way the weekly chess health report sends). A process shorter than ~0.25 s can slip
+through; a rule (CLAUDE.md) plus this watcher make it very unlikely to go unnoticed.
+
+  chess-argv-watch              the service (chess-argv-watch.service runs it)
+  chess-argv-watch --scan-once  one pass over all processes now, prints hits (names only)
+  chess-argv-watch --self-test  starts a short test process carrying a FAKE secret and checks it is caught
+  chess-argv-watch --status     what the service last wrote to its status file
+
+Secrets compared (values read as root, kept only in this process, re-read when a file changes):
+  /opt/chess/lila-docker/.env + the staging copy's .env  (names with PASS/SECRET/TOKEN/KEY)
+  /etc/chess-contact.env SMTP_PASS, the system@ line of /etc/postfix/sasl_passwd
+  /opt/chess/lila-docker/conf/lila.conf + picfit.json + settings.*  (quoted values on secret/key/token/password lines,
+  except upstream's published defaults)
+"""
+import json, os, re, smtplib, ssl, subprocess, sys, threading, time
+from email.message import EmailMessage
+
+L = "/opt/chess/lila-docker"
+STAGING_ENV = "/opt/chess/lila-staging/lila-docker/.env"
+UPSTREAM_DEFAULTS = [L + "/quick/conf/lila.conf", L + "/conf/mono.conf"]
+CONTACT = "/etc/chess-contact.env"
+SASL = "/etc/postfix/sasl_passwd"
+LOG = os.environ.get("CHESS_ARGV_LOG", "/var/log/chess-argv-watch.log")
+STATE_DIR = os.environ.get("CHESS_ARGV_STATE", "/var/lib/chess-argv-watch")
+TO = "system@chesspuertoricocoffee.com"
+MIN_LEN = 12
+FAST, FULL, RELOAD, STATUS_EVERY, MAIL_GAP, YOUNG = 0.25, 15, 30, 60, 6 * 3600, 3.0
+CANARY_LABEL = "CANARY (fake test value of checks.py)"
+SECRETY = re.compile(r"secret|passw|key|token|salt|private|credential", re.I)
+ENV_KEY = re.compile(r"PASS|SECRET|TOKEN|KEY", re.I)
+
+
+os.umask(0o077)   # every file this creates (log, status, copies) is root-only
+
+
+def now():
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def env_values(path, keys=None):
+    out = {}
+    try:
+        for line in open(path, errors="replace"):
+            m = re.match(r"\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$", line)
+            if not m or (keys and m.group(1) not in keys) or (not keys and not ENV_KEY.search(m.group(1))):
+                continue
+            v = m.group(2).strip()
+            if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
+                v = v[1:-1]
+            out[m.group(1)] = v
+    except OSError:
+        return None
+    return out
+
+
+def quoted_secrets(path):
+    """quoted values on lines that name a secret/key/token/password; URLs, paths and text with spaces are not secrets"""
+    out = {}
+    try:
+        for i, line in enumerate(open(path, errors="replace"), 1):
+            if SECRETY.search(line):
+                k = re.match(r'\s*"?([A-Za-z0-9_.\-]+)', line)
+                for n, s in enumerate(re.findall(r'"([^"]{%d,})"' % MIN_LEN, line)):
+                    if re.match(r"(?i)(https?|wss?)://|/", s) or " " in s or s == (k.group(1) if k else None):
+                        continue
+                    out[f"{os.path.basename(path)}:{k.group(1) if k else 'line'}:{i}.{n}"] = s
+    except OSError:
+        return None
+    return out
+
+
+SOURCES = [L + "/.env", STAGING_ENV, CONTACT, SASL, L + "/conf/lila.conf", L + "/conf/picfit.json",
+           L + "/settings.env", L + "/settings.toml", os.path.join(STATE_DIR, "canary")]
+
+
+def load_secrets(extra=None):
+    """-> ({value_bytes: name}, {source: ok/missing/unreadable})"""
+    vals, src = {}, {}
+    public = set()
+    for p in UPSTREAM_DEFAULTS:
+        d = quoted_secrets(p) or {}
+        public |= set(d.values())
+    def add(name, v):
+        if v and len(v) >= MIN_LEN and v not in public:
+            vals.setdefault(v.encode(), name)
+    for p, label in ((L + "/.env", ".env"), (STAGING_ENV, "staging .env")):
+        d = env_values(p)
+        src[p] = "missing" if d is None and not os.path.exists(p) else ("unreadable" if d is None else "ok")
+        for k, v in (d or {}).items():
+            add(f"{label} {k}", v)
+    d = env_values(CONTACT, {"SMTP_PASS"})
+    src[CONTACT] = "ok" if d else "unreadable"
+    add("chess-contact.env SMTP_PASS", (d or {}).get("SMTP_PASS"))
+    try:
+        for line in open(SASL):
+            f = line.split()
+            if len(f) == 2 and f[1].startswith("system@chesspuertoricocoffee.com:"):
+                add("sasl_passwd system@", f[1].split(":", 1)[1])
+        src[SASL] = "ok"
+    except OSError:
+        src[SASL] = "unreadable"
+    for p in (L + "/conf/lila.conf", L + "/conf/picfit.json", L + "/settings.env", L + "/settings.toml"):
+        d = quoted_secrets(p)
+        if p.endswith("settings.env"):
+            d = {f"settings.env {k}": v for k, v in (env_values(p) or {}).items()} or d
+        src[p] = "missing" if d is None and not os.path.exists(p) else ("unreadable" if d is None else "ok")
+        for k, v in (d or {}).items():
+            add(k, v)
+    try:
+        c = open(os.path.join(STATE_DIR, "canary")).read().strip()
+        if re.fullmatch(r"fake-canary-[0-9]{4}", c):
+            vals[c.encode()] = CANARY_LABEL
+    except OSError:
+        pass
+    if extra:
+        vals[extra.encode()] = "TEST (fake secret of --self-test)"
+    return vals, src
+
+
+def sources_sig():
+    sig = []
+    for p in SOURCES:
+        try:
+            st = os.stat(p)
+            sig.append((p, st.st_mtime_ns, st.st_size, st.st_ino))
+        except OSError:
+            sig.append((p, None))
+    return sig
+
+
+def read_cmdline(pid):
+    try:
+        with open(f"/proc/{pid}/cmdline", "rb") as f:
+            return f.read(1 << 20)
+    except OSError:
+        return b""
+
+
+def safe_name(name, vals):
+    """a process name is shown only when no 4 characters of it occur in any secret (it could be part of one)"""
+    if not name or name == "?":
+        return "?"
+    for v in vals:
+        for i in range(max(1, len(name) - 3)):
+            if name[i:i + 4].encode() in v:
+                return "[name hidden]"
+    return name
+
+
+def proc_info(pid):
+    def r(p):
+        try:
+            return open(p, "rb").read().decode("utf-8", "replace").strip()
+        except OSError:
+            return "?"
+    comm = r(f"/proc/{pid}/comm")
+    uid, ppid = "?", "?"
+    try:
+        for l in open(f"/proc/{pid}/status"):
+            if l.startswith("Uid:"):
+                uid = l.split()[1]
+            elif l.startswith("PPid:"):
+                ppid = l.split()[1]
+    except OSError:
+        pass
+    try:
+        import pwd
+        user = pwd.getpwuid(int(uid)).pw_name
+    except Exception:
+        user = uid
+    pcomm = r(f"/proc/{ppid}/comm") if ppid != "?" else "?"
+    return comm, user, ppid, pcomm
+
+
+def match(cmd, vals):
+    if not cmd:
+        return []
+    return sorted({name for v, name in vals.items() if v in cmd})
+
+
+def pids():
+    out = []
+    for e in os.scandir("/proc"):
+        if e.name.isdigit():
+            out.append(int(e.name))
+    return out
+
+
+def log(line):
+    with open(LOG, "a") as f:
+        f.write(f"{now()} {line}\n")
+    print(line, flush=True)
+
+
+def send_mail(subject, body):
+    env = env_values(CONTACT, {"SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS"}) or {}
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = f"Chess Puerto Rico Coffee <{env.get('SMTP_USER', TO)}>"
+    msg["To"] = TO
+    msg.set_content(body)
+    with smtplib.SMTP(env.get("SMTP_HOST", "smtp.ionos.com"), int(env.get("SMTP_PORT", 587)), timeout=30) as s:
+        s.starttls(context=ssl.create_default_context())
+        s.login(env["SMTP_USER"], env["SMTP_PASS"])
+        s.send_message(msg)
+
+
+def write_status(st):
+    os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+    tmp = os.path.join(STATE_DIR, ".status.tmp")
+    with open(tmp, "w") as f:
+        json.dump(st, f, indent=1, sort_keys=True)
+    os.replace(tmp, os.path.join(STATE_DIR, "status.json"))
+
+
+def scan_all(vals, me):
+    hits = []
+    for pid in pids():
+        if pid == me:
+            continue
+        names = match(read_cmdline(pid), vals)
+        if names:
+            hits.append((pid, names))
+    return hits
+
+
+def service():
+    me = os.getpid()
+    vals, src = load_secrets()
+    sig, t_full, t_reload, t_status = sources_sig(), 0.0, time.monotonic(), 0.0
+    seen, young, reported = set(), {}, {}
+    st = {"pid": me, "started": now(), "secrets_loaded": len(vals), "sources": src, "hits_total": 0, "last_hit": None,
+          "canary_hits": 0, "mails_sent": 0, "last_mail": None, "mail_errors": 0, "last_full_scan": None}
+    mail = {"last": 0.0}
+    log(f"START pid={me} secrets_loaded={len(vals)} sources=" + ",".join(f"{os.path.basename(p)}:{s}" for p, s in src.items()))
+
+    def mailer(names, who):
+        try:
+            send_mail("Chess: a secret showed in the process list",
+                      f"{now()}\n\nchess-argv-watch saw these chess secrets on a process's command line (any account on the "
+                      f"server could read it):\n  {', '.join(names)}\n\n{who}\n\nThe value is not in this e-mail. Look at "
+                      f"/var/log/chess-argv-watch.log; treat the named secret(s) as exposed and change them (sudo chess-secret-set "
+                      f"for the mail password / explorer token). At most one e-mail every 6 hours.\n")
+            st["mails_sent"] += 1
+            st["last_mail"] = now()
+            log("MAIL sent")
+        except Exception as e:
+            st["mail_errors"] += 1
+            log(f"MAIL FAILED {type(e).__name__}")
+
+    while True:
+        t = time.monotonic()
+        if t - t_reload >= RELOAD:
+            t_reload = t
+            s2 = sources_sig()
+            if s2 != sig:
+                sig = s2
+                vals, src = load_secrets()
+                st["secrets_loaded"], st["sources"] = len(vals), src
+                log(f"RELOAD secrets_loaded={len(vals)}")
+        full = t - t_full >= FULL
+        cur = pids()
+        if full:
+            t_full = t
+            todo = cur
+            for p in cur:
+                if p not in seen:
+                    young[p] = t   # first seen in this sweep: read again for YOUNG seconds as well
+            seen = set(cur)
+            alive = set(cur)
+            reported = {k: v for k, v in reported.items() if k[0] in alive}
+            young = {p: ts for p, ts in young.items() if p in alive and t - ts < YOUNG}   # (keeps the ones just added)
+            st["last_full_scan"] = now()
+        else:
+            new = [p for p in cur if p not in seen]
+            for p in new:
+                young[p] = t
+            seen.update(new)
+            # a new PID is read again for YOUNG seconds: a fork shows the PARENT's command line until it execs the new program
+            young = {p: ts for p, ts in young.items() if t - ts < YOUNG}
+            todo = list(young)
+        for pid in todo:
+            if pid == me:
+                continue
+            names = match(read_cmdline(pid), vals)
+            if not names:
+                continue
+            key = (pid, tuple(names))
+            if key in reported:
+                continue
+            reported[key] = t
+            comm, user, ppid, pcomm = proc_info(pid)
+            comm, pcomm = safe_name(comm, vals), safe_name(pcomm, vals)
+            if names == [CANARY_LABEL]:
+                st["canary_hits"] += 1
+                log(f"CANARY seen on pid {pid} (the checks' fake value - no e-mail)")
+                continue
+            names = [n for n in names if n != CANARY_LABEL]
+            st["hits_total"] += 1
+            st["last_hit"] = {"time": now(), "names": names, "comm": comm, "user": user}
+            who = f"process: {comm} (pid {pid}, user {user}), parent: {pcomm} (pid {ppid})"
+            log(f"HIT secret(s) on a command line: {', '.join(names)} | {who}")
+            if time.time() - mail["last"] >= MAIL_GAP:
+                mail["last"] = time.time()
+                threading.Thread(target=mailer, args=(names, who), daemon=True).start()   # never blocks the scan
+        if t - t_status >= STATUS_EVERY:
+            t_status = t
+            st["heartbeat"] = now()
+            try:
+                write_status(st)
+            except OSError as e:
+                log(f"STATUS WRITE FAILED {type(e).__name__}")
+        time.sleep(FAST)
+
+
+def main():
+    a = sys.argv[1:]
+    if os.geteuid() != 0:
+        print("run it as root (sudo)")
+        return 2
+    if a == []:
+        service()
+    if a == ["--scan-once"]:
+        vals, src = load_secrets()
+        print(f"secrets loaded: {len(vals)}; sources: " + ", ".join(f"{p}={s}" for p, s in src.items()))
+        hits = scan_all(vals, os.getpid())
+        for pid, names in hits:
+            comm, user, ppid, pcomm = proc_info(pid)
+            print(f"HIT {', '.join(names)} | process {safe_name(comm, vals)} pid {pid} user {user} | parent {safe_name(pcomm, vals)}")
+        print(f"processes with a chess secret on their command line: {len(hits)}")
+        return 1 if hits else 0
+    if a == ["--self-test"]:
+        fake = "fake-secret-%04d" % (int.from_bytes(os.urandom(2), "big") % 10000)
+        vals, src = load_secrets(extra=fake)
+        p = subprocess.Popen(["/bin/sh", "-c", "sleep 4", fake])
+        try:
+            time.sleep(0.3)
+            hits = dict(scan_all(vals, os.getpid()))
+            caught = p.pid in hits and "TEST (fake secret of --self-test)" in hits[p.pid]
+            real = {pid: [x for x in n if x != CANARY_LABEL] for pid, n in hits.items() if pid != p.pid}
+            real = {pid: n for pid, n in real.items() if n}
+        finally:
+            p.kill(); p.wait()
+        ok_src = all(s in ("ok", "missing") for s in src.values()) and src.get(L + "/.env") == "ok"
+        print(f"secrets loaded: {len(vals) - 1} (+1 fake); sources: " + ", ".join(f"{os.path.basename(x)}={s}" for x, s in src.items()))
+        print(f"fake secret on a test process's command line: {'CAUGHT' if caught else 'MISSED'}")
+        print(f"real chess secrets on a command line right now: {sum(len(n) for n in real.values())}")
+        ok = caught and ok_src and len(vals) > 5 and not real
+        print("SELF-TEST: " + ("PASS" if ok else "FAIL"))
+        return 0 if ok else 1
+    if a == ["--status"]:
+        try:
+            st = json.load(open(os.path.join(STATE_DIR, "status.json")))
+        except OSError:
+            print("no status file yet")
+            return 1
+        act = subprocess.run(["systemctl", "is-active", "chess-argv-watch.service"], capture_output=True, text=True).stdout.strip()
+        print(f"service: {act}; started {st.get('started')}; heartbeat {st.get('heartbeat')}; secrets loaded {st.get('secrets_loaded')}")
+        print(f"hits total {st.get('hits_total')}; last hit {st.get('last_hit')}; mails sent {st.get('mails_sent')}, mail errors {st.get('mail_errors')}")
+        return 0
+    print(__doc__)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
