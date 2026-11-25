@@ -99,7 +99,7 @@ services:
     profiles:
       - base
   caddy:
-    image: caddy:2.10.2-alpine
+    image: caddy:2.11.9-alpine
     restart: unless-stopped
     ports:
       # 2026-09-13: bound to 127.0.0.1 deliberately. Published as 0.0.0.0 these were

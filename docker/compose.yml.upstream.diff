@@ -1,5 +1,5 @@
 diff --git a/compose.yml b/compose.yml
-index bda4f5a..65d992f 100644
+index bda4f5a..5d005fa 100644
 --- a/compose.yml
 +++ b/compose.yml
 @@ -5,10 +5,15 @@ include:
@@ -107,7 +107,8 @@ index bda4f5a..65d992f 100644
      profiles:
        - base
    caddy:
-     image: caddy:2.10.2-alpine
+-    image: caddy:2.10.2-alpine
++    image: caddy:2.11.9-alpine
      restart: unless-stopped
      ports:
 -      - 8080:80
