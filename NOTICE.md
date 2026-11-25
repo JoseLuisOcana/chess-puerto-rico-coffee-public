@@ -337,8 +337,9 @@ unchanged ("ordenador" stays correct in Galician and Asturian).
 Each file is in `lila-modifications/` with an `.upstream.diff` generated with
 `git diff` against the deployed upstream lila commit (`eb024cba`, deployed 2026-11-25;
 previously `f5b261e` from 2026-10-08, and `f9e0e4c` before that). These twenty files carry the only
-source changes. On the 2026-11-25 upgrade the same changes were re-applied on top of `eb024cba`
-(one import line in `TournamentScheduler.scala` merged by hand; no change in behaviour).
+source changes. On the 2026-11-25 upgrade the first ten were re-applied on top of `eb024cba`
+(one import line in `TournamentScheduler.scala` merged by hand; no change in behaviour); the other ten
+(`SecurityForm.scala`, `AuthUi.scala` and the eight `es-ES.xml` files) were added later the same day.
 
 ## Upstream versions
 
