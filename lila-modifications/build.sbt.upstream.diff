@@ -1,5 +1,5 @@
 diff --git a/build.sbt b/build.sbt
-index 73d5df25e5..f305c0e49f 100644
+index fa48e25166..8ba50caa16 100644
 --- a/build.sbt
 +++ b/build.sbt
 @@ -45,7 +45,9 @@ lazy val root = Project("lila", file("."))

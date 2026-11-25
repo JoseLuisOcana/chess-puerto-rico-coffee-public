@@ -1,12 +1,12 @@
 package lila.security
 
 import play.api.i18n.Lang
-import play.api.mvc.{ Cookie, Session, RequestHeader }
+import play.api.mvc.{ Cookie, Session }
 import scalatags.Text.all.*
 
 import lila.core.config.*
-import lila.core.i18n.Translate
 import lila.core.i18n.I18nKey.emails as trans
+import lila.core.i18n.Translate
 import lila.core.net.ValidReferrer
 import lila.mailer.Mailer
 import lila.user.{ User, UserApi, UserRepo }
@@ -165,12 +165,12 @@ final class EmailConfirmByUserSend(
   private lazy val rateLimitPerUser = RateLimit[UserId](
     credits = 4,
     duration = 1.hour,
-    key = "user.email.confirm.user"
+    limiterKey = "user.email.confirm.user"
   )
   private lazy val rateLimitPerEmail = RateLimit[EmailAddress](
     credits = 4,
     duration = 1.hour,
-    key = "user.email.confirm.email"
+    limiterKey = "user.email.confirm.email"
   )
 
 object EmailConfirm:
@@ -188,13 +188,13 @@ object EmailConfirm:
     val name = "email_confirm"
     private val sep = ":"
 
-    def newSession(lilaCookie: LilaCookie, user: User, email: EmailAddress)(using RequestHeader): Cookie =
+    def newSession(lilaCookie: LilaCookie, user: User, email: EmailAddress)(using Req): Cookie =
       lilaCookie.withSession(remember = false): _ =>
         Session.emptyCookie + (name -> s"${user.username}$sep${email.value}")
 
-    def has(req: RequestHeader) = req.session.data contains name
+    def has(req: Req) = req.session.data contains name
 
-    def get(req: RequestHeader): Option[UserEmail] =
+    def get(req: Req): Option[UserEmail] =
       req.session.get(name).map(_.split(sep, 2)).collect { case Array(username, email) =>
         UserEmail(UserName(username), EmailAddress(email))
       }
@@ -211,22 +211,22 @@ object EmailConfirm:
   private lazy val rateLimitPerIP = RateLimit[IpAddress](
     credits = 40,
     duration = 1.hour,
-    key = "email.confirms.ip"
+    limiterKey = "email.confirms.ip"
   )
 
   private lazy val rateLimitPerUser = RateLimit[UserId](
     credits = 3,
     duration = 1.hour,
-    key = "email.confirms.user"
+    limiterKey = "email.confirms.user"
   )
 
   private lazy val rateLimitPerEmail = RateLimit[String](
     credits = 3,
     duration = 1.hour,
-    key = "email.confirms.email"
+    limiterKey = "email.confirms.email"
   )
 
-  def rateLimit[A](userEmail: UserEmail, req: RequestHeader, default: => Fu[A])(run: => Fu[A]): Fu[A] =
+  def rateLimit[A](userEmail: UserEmail, req: Req, default: => Fu[A])(run: => Fu[A]): Fu[A] =
     rateLimitPerUser(userEmail.username.id, default):
       rateLimitPerEmail(userEmail.email.value, default):
         rateLimitPerIP(HTTPRequest.ipAddress(req), default):

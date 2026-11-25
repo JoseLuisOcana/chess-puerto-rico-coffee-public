@@ -1,16 +1,16 @@
 diff --git a/modules/tournament/src/main/TournamentScheduler.scala b/modules/tournament/src/main/TournamentScheduler.scala
-index 12406783cb..42dcc14396 100644
+index eee050b4e8..02d74289a8 100644
 --- a/modules/tournament/src/main/TournamentScheduler.scala
 +++ b/modules/tournament/src/main/TournamentScheduler.scala
-@@ -2,6 +2,7 @@ package lila.tournament
+@@ -1,6 +1,7 @@
+ package lila.tournament
  
- import chess.StartingPosition
- import chess.IntRating
+ import chess.{ IntRating, StartingPosition }
 +import chess.Clock.{ IncrementSeconds, LimitSeconds }
  
  import java.time.DayOfWeek.*
  import java.time.Month.*
-@@ -24,7 +25,14 @@ final private class TournamentScheduler(tournamentRepo: TournamentRepo)(using
+@@ -23,7 +24,14 @@ final private class TournamentScheduler(tournamentRepo: TournamentRepo)(using
        try
          val newPlans = TournamentScheduler.allWithConflicts()
          val tourneysToAdd = PlanBuilder.getNewTourneys(dbScheds, newPlans)
@@ -26,7 +26,7 @@ index 12406783cb..42dcc14396 100644
        catch
          case e: Exception =>
            logger.error(s"failed to schedule all: ${e.getMessage}")
-@@ -479,6 +487,44 @@ Thank you all, you rock!""".some,
+@@ -477,6 +485,44 @@ Thank you all, you rock!""".some,
        yield schedule.plan
      ).flatten.filter(_.schedule.at.isAfter(rightNow))
  

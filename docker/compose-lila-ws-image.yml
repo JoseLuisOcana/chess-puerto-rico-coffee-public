@@ -2,7 +2,7 @@
 services:
   lila_ws:
     # pinned 2026-10-08 to the build tested in staging (2026-10-06 CI image); bump deliberately, never via :latest
-    image: ghcr.io/lichess-org/lila-ws@sha256:72403859ee5075c0cd9fab5a7a645a265979f9528294c7347f0fa34a0fa17e24
+    image: ghcr.io/lichess-org/lila-ws@sha256:5db706e75f5bc05f104abe69043948d5bc2a7f42330015836cb08757d92ee46d
     platform: linux/amd64
     restart: unless-stopped
     environment:

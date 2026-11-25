@@ -158,11 +158,11 @@ final class TournamentList(helpers: Helpers, ui: TournamentUi)(
           frag(
             spot.iconImg
               .map { i =>
-                img(cls := "img", src := assetUrl(s"images/$i"))
+                img(cls := "img", src := assetPath(s"images/$i"))
               }
               .getOrElse {
                 spot.iconFont.fold[Frag](iconTag(Icon.Trophy)(cls := "img")) {
-                  case Icon.Globe => img(cls := "img icon", src := assetUrl(s"images/globe.svg"))
+                  case Icon.Globe => img(cls := "img icon", src := assetPath(s"images/globe.svg"))
                   case i => iconTag(i)(cls := "img")
                 }
               },
@@ -309,8 +309,8 @@ final class TournamentList(helpers: Helpers, ui: TournamentUi)(
               div(cls := "tournament-shields")(
                 history.sorted.map { (categ, awards) =>
                   section(
-                    h2(
-                      a(href := routes.Tournament.categShields(categ.key))(
+                    a(href := routes.Tournament.categShields(categ.key))(
+                      h2(
                         span(cls := "shield-trophy")(categ.icon),
                         categ.i18n()
                       )

@@ -1,8 +1,8 @@
 diff --git a/modules/ublog/src/main/UblogPost.scala b/modules/ublog/src/main/UblogPost.scala
-index e0cf6fc121..e0d9fc6f35 100644
+index caf4e5a012..3d0cf039aa 100644
 --- a/modules/ublog/src/main/UblogPost.scala
 +++ b/modules/ublog/src/main/UblogPost.scala
-@@ -51,6 +51,9 @@ case class UblogPost(
+@@ -50,6 +50,9 @@ case class UblogPost(
      def hasTags = d.evergreen.isDefined
      val base = automod.getOrElse(UblogAutomod.Assessment(quality = Quality.spam))
      val assessment = base.copy(

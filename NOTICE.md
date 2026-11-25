@@ -313,8 +313,10 @@ Scheduled tournaments for a small site:
   created twice (same name and start).
 
 Each file is in `lila-modifications/` with an `.upstream.diff` generated with
-`git diff` against the deployed upstream lila commit (`f5b261e`, deployed 2026-10-08;
-previously `f9e0e4c`). These ten files carry the only source changes.
+`git diff` against the deployed upstream lila commit (`eb024cba`, deployed 2026-11-25;
+previously `f5b261e` from 2026-10-08, and `f9e0e4c` before that). These ten files carry the only
+source changes. On the 2026-11-25 upgrade the same changes were re-applied on top of `eb024cba`
+(one import line in `TournamentScheduler.scala` merged by hand; no change in behaviour).
 
 ## Upstream versions
 
@@ -322,10 +324,12 @@ The deployment tracks the upstream Lichess repositories directly from
 github.com/lichess-org. For the exact upstream commit currently deployed,
 consult the docker-compose image tags in `docker/compose.yml`.
 
-Deployed since 2026-10-08: lila `f5b261e` (+ the modifications above), lila-ws image pinned by
-digest in `docker/compose-lila-ws-image.yml`, lila-fishnet `3837bbc`, fishnet `2.15.0`, lila-docker
-upstream `f1e918c` merged with this site's compose changes (`docker/*.upstream.diff`).
+Deployed since 2026-11-25: lila `eb024cba` (+ the modifications above), lila-ws image pinned by
+digest in `docker/compose-lila-ws-image.yml` (the 2026-11-22 upstream CI image, built from lila-ws
+`257e811`), lila-fishnet `3837bbc`, fishnet `2.15.0`, lila-docker upstream `f1e918c` merged with this
+site's compose changes (`docker/*.upstream.diff`). Before 2026-11-25: lila `f5b261e` (2026-10-08) and the
+2026-10-06 lila-ws image.
 
 ---
 
-*Last updated: October 2026*
+*Last updated: November 2026*

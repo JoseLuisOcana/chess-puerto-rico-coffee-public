@@ -1,8 +1,8 @@
 diff --git a/modules/tournament/src/main/TournamentRepo.scala b/modules/tournament/src/main/TournamentRepo.scala
-index 87b11ceaeb..fcd9ee345c 100644
+index 8feeb253e4..81e273eca4 100644
 --- a/modules/tournament/src/main/TournamentRepo.scala
 +++ b/modules/tournament/src/main/TournamentRepo.scala
-@@ -248,6 +248,10 @@ final class TournamentRepo(val coll: Coll, playerCollName: CollName)(using Execu
+@@ -254,6 +254,10 @@ final class TournamentRepo(val coll: Coll, playerCollName: CollName)(using Execu
        .map:
          _.filter(_.isStillWorthEntering)
  
@@ -13,7 +13,7 @@ index 87b11ceaeb..fcd9ee345c 100644
    def uniques(max: Int): Fu[List[Tournament]] =
      coll
        .find(selectUnique)
-@@ -266,8 +270,11 @@ final class TournamentRepo(val coll: Coll, playerCollName: CollName)(using Execu
+@@ -272,8 +276,11 @@ final class TournamentRepo(val coll: Coll, playerCollName: CollName)(using Execu
    def allScheduledDedup: Fu[List[Tournament]] =
      coll
        .find(

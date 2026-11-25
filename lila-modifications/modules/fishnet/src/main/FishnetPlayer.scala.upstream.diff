@@ -1,5 +1,5 @@
 diff --git a/modules/fishnet/src/main/FishnetPlayer.scala b/modules/fishnet/src/main/FishnetPlayer.scala
-index 4d463b4ab5..37b8d06f6a 100644
+index 1004d7f308..a635a7a301 100644
 --- a/modules/fishnet/src/main/FishnetPlayer.scala
 +++ b/modules/fishnet/src/main/FishnetPlayer.scala
 @@ -28,11 +28,11 @@ final class FishnetPlayer(

@@ -1,5 +1,5 @@
 diff --git a/modules/tournament/src/main/ui/TournamentList.scala b/modules/tournament/src/main/ui/TournamentList.scala
-index 6bce9440f8..7caccabf6b 100644
+index e34060aad8..7d861139e1 100644
 --- a/modules/tournament/src/main/ui/TournamentList.scala
 +++ b/modules/tournament/src/main/ui/TournamentList.scala
 @@ -62,17 +62,26 @@ final class TournamentList(helpers: Helpers, ui: TournamentUi)(

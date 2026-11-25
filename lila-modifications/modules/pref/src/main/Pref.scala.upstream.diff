@@ -1,8 +1,8 @@
 diff --git a/modules/pref/src/main/Pref.scala b/modules/pref/src/main/Pref.scala
-index 5d4b459cb8..8edd77dc52 100644
+index 13f0c7f7d5..7045b819b8 100644
 --- a/modules/pref/src/main/Pref.scala
 +++ b/modules/pref/src/main/Pref.scala
-@@ -472,7 +472,9 @@ object Pref:
+@@ -455,7 +455,9 @@ object Pref:
  
    lazy val default = Pref(
      id = UserId(""),

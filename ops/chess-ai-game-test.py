@@ -57,7 +57,8 @@ def create_game(ctx):
     conn.close()
     if r.status not in (301, 302, 303):
         fail(f"POST /setup/ai returned {r.status} (expected a redirect)")
-    game_id = loc.strip("/").split("/")[0]
+    # 2026-11-24 (BUTTON 236): lila now redirects to /game/<gameId> (it was /<gameId>); the LAST path segment works with both
+    game_id = loc.split("?")[0].strip("/").split("/")[-1]
     player_id = next((c.split(";")[0].split("=", 1)[1] for c in cookies if c.startswith("rk2=")), "")
     if len(game_id) != 8 or len(player_id) != 4:
         fail(f"could not parse game/player id (Location={loc!r}, rk2={player_id!r})")

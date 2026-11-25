@@ -1,5 +1,5 @@
 diff --git a/modules/security/src/main/EmailConfirm.scala b/modules/security/src/main/EmailConfirm.scala
-index d7ec16b1e3..207dec4090 100644
+index 8882733fa7..5f00bef793 100644
 --- a/modules/security/src/main/EmailConfirm.scala
 +++ b/modules/security/src/main/EmailConfirm.scala
 @@ -60,7 +60,8 @@ final class EmailConfirmMailer(
