@@ -1,0 +1,13 @@
+diff --git a/translation/dest/learn/es-ES.xml b/translation/dest/learn/es-ES.xml
+index 5161985ee3..0b94b9ae8c 100644
+--- a/translation/dest/learn/es-ES.xml
++++ b/translation/dest/learn/es-ES.xml
+@@ -173,7 +173,7 @@ Peón = 1</string>
+   <string name="playPeople">Jugar contra otros</string>
+   <string name="opponentsFromAroundTheWorld">Oponentes de todo el mundo</string>
+   <string name="playMachine">Jugar contra la máquina</string>
+-  <string name="testYourSkillsWithTheComputer">Ponte a prueba contra el ordenador</string>
++  <string name="testYourSkillsWithTheComputer">Ponte a prueba contra la computadora</string>
+   <string name="letsGo">¡Comencemos!</string>
+   <string name="stageX">Nivel %s</string>
+   <string name="awesome">¡Alucinante!</string>

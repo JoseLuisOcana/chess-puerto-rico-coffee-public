@@ -1,0 +1,33 @@
+diff --git a/modules/security/src/main/SecurityForm.scala b/modules/security/src/main/SecurityForm.scala
+index 86e7129ee7..4b590d03ae 100644
+--- a/modules/security/src/main/SecurityForm.scala
++++ b/modules/security/src/main/SecurityForm.scala
+@@ -102,7 +102,8 @@ final class SecurityForm(
+     private val agreement = mapping(
+       "assistance" -> agreementBool,
+       "nice" -> agreementBool,
+-      "account" -> agreementBool
++      "account" -> agreementBool,
++      "age13" -> agreementBool // Chess Puerto Rico Coffee: sign-up only for players 13 or older
+     )(AgreementData.apply)(unapply)
+ 
+     def full(simpleSignup: Option[SimpleSignup]): SignupForm =
+@@ -125,7 +126,7 @@ final class SecurityForm(
+                 username = prefill.username,
+                 password = "",
+                 email = prefill.email,
+-                agreement = AgreementData(true, true, true),
++                agreement = AgreementData(true, true, true, age13 = false), // the age box is always ticked by the player
+                 fp = none
+               )
+             ,
+@@ -261,7 +262,8 @@ object SecurityForm:
+   case class AgreementData(
+       assistance: Boolean,
+       nice: Boolean,
+-      account: Boolean
++      account: Boolean,
++      age13: Boolean
+   )
+ 
+   case class SignupData(

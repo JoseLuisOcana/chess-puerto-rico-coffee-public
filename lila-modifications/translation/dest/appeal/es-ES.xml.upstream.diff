@@ -1,0 +1,13 @@
+diff --git a/translation/dest/appeal/es-ES.xml b/translation/dest/appeal/es-ES.xml
+index e7305c7928..b1c4f4da5e 100644
+--- a/translation/dest/appeal/es-ES.xml
++++ b/translation/dest/appeal/es-ES.xml
+@@ -1,7 +1,7 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+   <string name="cleanAllGood">Tu cuenta no está marcada o restringida. ¡Todo está bien!</string>
+-  <string name="engineMarked">Tu cuenta fue restringida por el uso de asistencia del motor u ordenador en las partidas.</string>
++  <string name="engineMarked">Tu cuenta fue restringida por el uso de asistencia del motor o de una computadora en las partidas.</string>
+   <string name="engineMarkedInfo">Definimos esto como usar cualquier ayuda externa para reforzar tus conocimientos o habilidades de cálculo con el fin de obtener una ventaja injusta sobre tu oponente. Ve a la página %s para más detalles.</string>
+   <string name="arenaBanned">Tu cuenta tiene prohibido unirse a torneos.</string>
+   <string name="prizeBanned">Tu cuenta tiene prohibido participar en torneos con premios reales.</string>

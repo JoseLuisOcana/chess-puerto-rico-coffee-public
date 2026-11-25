@@ -1,0 +1,22 @@
+diff --git a/translation/dest/search/es-ES.xml b/translation/dest/search/es-ES.xml
+index 19673c9f01..87c2217d52 100644
+--- a/translation/dest/search/es-ES.xml
++++ b/translation/dest/search/es-ES.xml
+@@ -14,7 +14,7 @@
+   <string name="loser">Perdedor</string>
+   <string name="from">Desde</string>
+   <string name="to">Hasta</string>
+-  <string name="humanOrComputer">Si el oponente era humano o un ordenador</string>
++  <string name="humanOrComputer">Si el oponente era humano o una computadora</string>
+   <string name="aiLevel">Nivel I.A</string>
+   <string name="source">Origen</string>
+   <string name="nbTurns">Cantidad de turnos</string>
+@@ -23,7 +23,7 @@
+   <string name="date">Fecha</string>
+   <string name="sortBy">Ordenar por</string>
+   <string name="analysis">Análisis</string>
+-  <string name="onlyAnalysed">Solo partidas que tengan un análisis por ordenador disponible</string>
++  <string name="onlyAnalysed">Solo partidas que tengan un análisis por computadora disponible</string>
+   <string name="color">Color</string>
+   <string name="evaluation">Evaluación</string>
+   <string name="maxNumber">Número máximo</string>

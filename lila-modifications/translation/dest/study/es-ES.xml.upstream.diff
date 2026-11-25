@@ -1,0 +1,13 @@
+diff --git a/translation/dest/study/es-ES.xml b/translation/dest/study/es-ES.xml
+index 6ca97a4daf..99a35eac81 100644
+--- a/translation/dest/study/es-ES.xml
++++ b/translation/dest/study/es-ES.xml
+@@ -48,7 +48,7 @@
+   <string name="commentThisMove">Comentar este movimiento</string>
+   <string name="annotateWithGlyphs">Anotar con iconos</string>
+   <string name="theChapterIsTooShortToBeAnalysed">El capítulo es demasiado corto para analizarlo.</string>
+-  <string name="onlyContributorsCanRequestAnalysis">Sólo los colaboradores del estudio pueden solicitar un análisis por ordenador.</string>
++  <string name="onlyContributorsCanRequestAnalysis">Sólo los colaboradores del estudio pueden solicitar un análisis por computadora.</string>
+   <string name="makeSureTheChapterIsComplete">Asegúrate de que el capítulo está completo. Sólo puede solicitar el análisis una vez.</string>
+   <string name="allSyncMembersRemainOnTheSamePosition">Todos los miembros de SYNC permanecen en la misma posición</string>
+   <string name="shareChanges">Comparte cambios con los espectadores y guárdalos en el servidor</string>

@@ -1,0 +1,25 @@
+diff --git a/translation/dest/dgt/es-ES.xml b/translation/dest/dgt/es-ES.xml
+index 0a73a3fc69..37a853e328 100644
+--- a/translation/dest/dgt/es-ES.xml
++++ b/translation/dest/dgt/es-ES.xml
+@@ -7,9 +7,9 @@
+   <string name="thisPageAllowsConnectingDgtBoard">Esta página te permite conectar tu tablero DGT a Lichess y usarlo para tus partidas.</string>
+   <string name="toConnectTheDgtBoard">Para conectar el tablero electrónico DGT necesitas instalar %s.</string>
+   <string name="downloadHere">Puedes descargar el programa aquí: %s.</string>
+-  <string name="ifLiveChessRunningOnThisComputer">Si %1$s se está ejecutando en tu ordenador, puedes comprobar tu conexión %2$s.</string>
++  <string name="ifLiveChessRunningOnThisComputer">Si %1$s se está ejecutando en tu computadora, puedes comprobar tu conexión %2$s.</string>
+   <string name="openingThisLink">abriendo este enlace</string>
+-  <string name="ifLiveChessRunningElsewhere">Si %1$s se ejecuta en un ordenador o puerto diferente, necesitarás establecer la dirección IP y el puerto aquí en la %2$s.</string>
++  <string name="ifLiveChessRunningElsewhere">Si %1$s se ejecuta en otra computadora o en un puerto distinto, necesitarás establecer la dirección IP y el puerto aquí en la %2$s.</string>
+   <string name="configurationSection">Sección de configuración</string>
+   <string name="keepPlayPageOpen">La página del tablero de juego debe permanecer abierta en tu navegador. No necesita estar visible, puedes minimizarla o colocarla al lado de la página de la partida en Lichess, pero no la cierres o el tablero dejará de funcionar.</string>
+   <string name="boardWillAutoConnect">El tablero se conectará automáticamente a cualquier partida que ya esté en curso o a cualquiera que comience. Pronto estará disponible la posibilidad de elegir qué partida jugar.</string>
+@@ -28,7 +28,7 @@
+   <string name="dgtBoardConnectivity">Conectividad del tablero DGT</string>
+   <string name="clickToGenerateOne">Haz clic para generar uno</string>
+   <string name="webSocketUrl">URL de WebSocket %s</string>
+-  <string name="useWebSocketUrl">Usa \"%1$s\" a menos que %2$s se ejecute en un ordenador o puerto diferente.</string>
++  <string name="useWebSocketUrl">Usa \"%1$s\" a menos que %2$s se ejecute en otra computadora o en un puerto distinto.</string>
+   <string name="textToSpeech">Texto a voz</string>
+   <string name="configureVoiceNarration">Configura la narración de voz de los movimientos realizados para que puedas mantener la vista en el tablero.</string>
+   <string name="enableSpeechSynthesis">Habilitar síntesis del habla</string>

@@ -41,11 +41,13 @@ source-disclosure requirements.
   token everywhere the deployment keeps it (asked twice with hidden typing, tested first, never shown, never logged,
   never on a command line). `ops/chess-argv-watch` + `ops/chess-argv-watch.service` warn the operator when one of the
   deployment's secrets appears on any process's command line (the name of the secret only, never its value).
-- (2026-10) **Sign-up age confirmation:** a required checkbox "I am 13 or older (or have parental
-  consent)." is added to lila's sign-up form by the nginx branding snippet (`sub_filter` at the end of the
-  agreement checkboxes, only on `/signup`); `public/static/prcoffee/signup.js` re-adds it if the anchor ever
-  moves and shows a clear message. The box has no `name`, so lila's server code is unchanged. The privacy
-  page (`public/static/privacy.html`) describes it and the embedded YouTube videos.
+- (2026-10, replaced 2026-11) **Sign-up age confirmation:** until 2026-11-25 a required checkbox "I am 13 or older (or have parental
+  consent)." was added to lila's sign-up form by the nginx branding snippet (`sub_filter` at the end of the
+  agreement checkboxes, only on `/signup`; `public/static/prcoffee/signup.js` re-added it if the anchor moved).
+  That box had no `name`, so lila never received it. Since 2026-11-25 the box ("I am 13 years old or older.",
+  no consent exception) is part of lila's own sign-up form and checked by the server - see section 5,
+  `SecurityForm.scala`; the nginx injection is off (the `sub_filter` anchors stay, with an empty value) and
+  `signup.js` is no longer loaded.
 - (2026-10) **Video embeds:** lila already embeds YouTube in privacy-enhanced mode (youtube-nocookie.com);
   the branding snippet corrects the player's hardcoded `origin=https://lichess.org` to this site's domain.
 - (2026-10) **Weekly health report:** `ops/chess-health-report.sh` + cron (Mondays) e-mails a read-only
@@ -316,9 +318,25 @@ Scheduled tournaments for a small site:
   subject to lichess's conflict pruning (which would cancel them for its own same-speed dailies) and are never
   created twice (same name and start).
 
+### modules/security/src/main/SecurityForm.scala + modules/web/src/main/ui/AuthUi.scala (2026-11)
+
+Sign-up only for players 13 years old or older, checked by the server:
+
+- `SecurityForm.signup`: a fourth required agreement, `agreement.age13` (like the three upstream agreements, it must be ticked or the
+  sign-up is refused). The prefilled "simple sign-up" sets it to `false`, so the player always ticks it.
+- `AuthUi.agreements`: the checkbox "I am 13 years old or older." / "Tengo 13 años o más." (both languages; the site's stylesheet shows
+  the one matching the page language).
+- Before this change the box was added by the web server (nginx) and was never sent to lila; that injection is removed.
+
+### translation/dest/*/es-ES.xml (2026-11)
+
+Puerto Rico Spanish: "computadora" instead of "ordenador" in 27 Spanish (es-ES) texts of 8 translation files (`appeal`, `dgt`, `faq`, `lag`,
+`learn`, `search`, `site`, `study`), with the grammar it needs ("la computadora", "análisis por computadora", ...). Other languages are
+unchanged ("ordenador" stays correct in Galician and Asturian).
+
 Each file is in `lila-modifications/` with an `.upstream.diff` generated with
 `git diff` against the deployed upstream lila commit (`eb024cba`, deployed 2026-11-25;
-previously `f5b261e` from 2026-10-08, and `f9e0e4c` before that). These ten files carry the only
+previously `f5b261e` from 2026-10-08, and `f9e0e4c` before that). These twenty files carry the only
 source changes. On the 2026-11-25 upgrade the same changes were re-applied on top of `eb024cba`
 (one import line in `TournamentScheduler.scala` merged by hand; no change in behaviour).
 
