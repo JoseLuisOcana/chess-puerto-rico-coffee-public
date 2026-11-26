@@ -1,0 +1,16 @@
+diff --git a/app/controllers/Dasher.scala b/app/controllers/Dasher.scala
+index 4d9eb69bd7..fdfbe41b0b 100644
+--- a/app/controllers/Dasher.scala
++++ b/app/controllers/Dasher.scala
+@@ -28,8 +28,9 @@ final class Dasher(env: Env) extends LilaController(env):
+             Json.obj(
+               "lang" -> Json.obj(
+                 "current" -> ctx.lang.code,
+-                "accepted" -> LangPicker.allFromRequestHeaders(ctx.req).map(_.code),
+-                "list" -> LangList.allChoices
++                // Chess Puerto Rico Coffee (BUTTON 255, 2026-11-26): the site is ENGLISH ONLY - the menu offers only English
++                "accepted" -> LangPicker.allFromRequestHeaders(ctx.req).map(_.code).filter(_.startsWith("en-")),
++                "list" -> LangList.allChoices.filter(_._1.startsWith("en-"))
+               ),
+               "streamer" -> isStreamer
+             ) ++ DasherJson(ctx.pref, gallery)

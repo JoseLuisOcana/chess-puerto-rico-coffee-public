@@ -1,0 +1,26 @@
+diff --git a/app/controllers/LilaController.scala b/app/controllers/LilaController.scala
+index fb1955903e..92b738bb78 100644
+--- a/app/controllers/LilaController.scala
++++ b/app/controllers/LilaController.scala
+@@ -339,18 +339,10 @@ abstract private[controllers] class LilaController(val env: Env)
+ 
+   def LangPage(call: Call)(f: Context ?=> Fu[Result])(language: Language): EssentialAction =
+     LangPage(call.url)(f)(language)
++  // Chess Puerto Rico Coffee (BUTTON 255, 2026-11-26): the site is ENGLISH ONLY - every language address (/es, /es/training ...)
++  // goes to its page without the prefix, for everyone (upstream: only for members; visitors could get the page in that language).
+   def LangPage(path: String)(f: Context ?=> Fu[Result])(language: Language): EssentialAction = Open:
+-    if ctx.isAuth
+-    then redirectWithQueryString(path)
+-    else
+-      import LangPicker.ByHref
+-      LangPicker.byHref(language, ctx.req) match
+-        case ByHref.NotFound => notFound(using ctx)
+-        case ByHref.Redir(code) =>
+-          redirectWithQueryString(s"/$code${~path.some.filter("/" !=)}")
+-        case ByHref.Refused(_) => redirectWithQueryString(path)
+-        case ByHref.Found(lang) =>
+-          f(using ctx.withLang(lang))
++    redirectWithQueryString(path)
+ 
+   def WithMyPerf[A](pt: lila.rating.PerfType)(f: Perf ?=> Fu[A])(using me: Option[Me]): Fu[A] = me
+     .traverse(env.user.perfsRepo.perfOf(_, pt))

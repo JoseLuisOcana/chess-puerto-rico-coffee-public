@@ -93,6 +93,16 @@ source-disclosure requirements.
   menu (`POST /translation/select`) has its own location in the vhost: it also sets `prclang` and sends the
   visitor back without a language prefix and without `?lang=`. The static pages show Spanish only for
   `?lang=es` or `prclang=es`; the `/es/...` pages always work.
+- (2026-11-26) **English only** (replaces "English first"): every page, for every visitor, in English. nginx
+  (`nginx/conf.d/chess-lang-map.conf` + the vhost): lila is always told `Accept-Language: en-US`; `?lang=` and the
+  `prclang` cookie are ignored; lila's language menu (`POST /translation/select`) is answered by nginx with 204 (nothing
+  saved) and `branding.css` hides its Language button; lila's language addresses (`/es`, `/es/training`, `/de/study` ...,
+  every code of lila's LangList, any case) and the Spanish static pages answer 301 to the English page (`Cache-Control:
+  no-store`); `/blog/community/<xx>.atom` 301s to `/blog/community.atom`; the sponsor bar and AGPL note are English only;
+  the English static pages have no hreflang / `og:locale:alternate` / Spanish link any more. lila itself (section 5:
+  `LangPicker`, `LilaController.LangPage`, `layout.hrefLangs`, `Dasher`) renders English too. Also: location `/`'s
+  canonical `Link` header is set only when the decoded path is plain URL characters (before, a `%0d%0a` in the address
+  could add a header line over HTTP/1.1).
 
 ## 2. Configuration
 
@@ -107,7 +117,8 @@ source-disclosure requirements.
 - **robots.txt** (`public/robots.txt`): Changed from upstream default
   `Disallow: /` to `Allow: /` for public search-engine indexing.
   Since 2026-10-30 every group also disallows the video library's tag-filter
-  URLs and its copies in languages other than English and Spanish.
+  URLs and its copies in languages other than English and Spanish. Since 2026-11-26 (English only) it says
+  `Language: English`; the `Allow: /es/video` lines stay so crawlers can see that those addresses now redirect.
 - **sitemap.xml** (`public/sitemap.xml`): Custom sitemap created for
   search indexing.
 - **compose.yml** / **compose-search.yml** (`docker/`): Environment
@@ -238,7 +249,8 @@ source-disclosure requirements.
 - **ops/chess-presentation-rollback.sh** (2026-10): undoes the October 2026 Spanish/FAQ polish in one
   command — restores the nine files changed that day from the backup taken first, moves the new pages
   (`faq.html`, `es/`) aside instead of deleting them, `nginx -t`, then a graceful reload; if `nginx -t` fails
-  it puts everything back and does not reload. `--dry-run` shows what it would change.
+  it puts everything back and does not reload. `--dry-run` shows what it would change. RETIRED 2026-11-26: it has no
+  safety check against the many changes made since, so it is no longer used.
 - **ops/chess-rebuild-lila.sh** (2026-10): rebuilds the prebuilt lila or lila-fishnet after a code
   change — builds in the one-off container while the site keeps running, copies the result to a new
   `prebuilt/<app>/builds/…` folder, switches `current`, restarts only that service, verifies it
@@ -266,8 +278,9 @@ Custom HTML pages for the deployment:
 - `public/static/privacy.html`
 - `public/static/terms-of-service.html`
 - `public/static/faq.html` and the Spanish pages `public/static/es/` (about, contact-us, faq, privacy, terms-of-service). Since
-  2026-11 the Spanish pages are neutral Spanish: `lang="es"` and "Patrocinado por" (also in the sponsor bar that
-  `nginx/snippets-chess-branding.conf` adds to lila's Spanish pages).
+  2026-11 the Spanish pages are neutral Spanish: `lang="es"` and "Patrocinado por". Since 2026-11-26 the site is English only:
+  the Spanish pages are kept in the repository and on the server but are no longer served - their addresses answer 301 to the
+  English page (section 1, "English only").
 - (2026-11) The static pages load their two fonts from this site, not from Google Fonts: `public/static/prcoffee/fonts.css` (Google's
   own @font-face rules for the latin + latin-ext subsets, addresses changed) and `public/static/prcoffee/fonts/` - Playfair Display and
   Source Sans 3, unmodified woff2 files as served by Google Fonts, under the SIL Open Font License 1.1 (licence texts next to them).
@@ -357,12 +370,22 @@ unchanged ("ordenador" stays correct in Galician and Asturian).
 upstream's `FeedApi.recentJson` listed the 7 newest posts including hidden drafts and future posts (one line:
 `updates.filter(_.published).take(7)`).
 
+### modules/i18n/src/main/LangPicker.scala, app/controllers/LilaController.scala, modules/web/src/main/ui/layout.scala, app/controllers/Dasher.scala (2026-11-26)
+
+English only (section 1): `LangPicker.apply` keeps a member's saved English (en-GB / en-US) and otherwise returns en-US -
+another saved language, lila's session language (its language menu) and the browser's languages are no longer used
+(upstream: saved language, then session, then Accept-Language). `LilaController.LangPage`: every language address (`/es`,
+`/es/training` ...) redirects to its page without the prefix, for everyone (upstream did this only for signed-in members).
+`layout.hrefLangs` prints no alternate-language links (upstream: x-default, en and 20 other languages). `Dasher`: the menu's
+language list (and its "accepted" marks) only English.
+
 Each file is in `lila-modifications/` with an `.upstream.diff` generated with
 `git diff` against the deployed upstream lila commit (`eb024cba`, deployed 2026-11-25;
-previously `f5b261e` from 2026-10-08, and `f9e0e4c` before that). These twenty-one files carry the only
+previously `f5b261e` from 2026-10-08, and `f9e0e4c` before that). These twenty-five files carry the only
 source changes. On the 2026-11-25 upgrade the first ten were re-applied on top of `eb024cba`
 (one import line in `TournamentScheduler.scala` merged by hand; no change in behaviour); the other ten
-(`SecurityForm.scala`, `AuthUi.scala` and the eight `es-ES.xml` files) were added later the same day.
+(`SecurityForm.scala`, `AuthUi.scala` and the eight `es-ES.xml` files) were added later the same day;
+`Feed.scala` and the four English-only files on 2026-11-26.
 
 ## Upstream versions
 

@@ -1,0 +1,23 @@
+diff --git a/modules/i18n/src/main/LangPicker.scala b/modules/i18n/src/main/LangPicker.scala
+index 4097e3aef8..2d4c1d412c 100644
+--- a/modules/i18n/src/main/LangPicker.scala
++++ b/modules/i18n/src/main/LangPicker.scala
+@@ -15,13 +15,15 @@ import lila.core.net.CountryCode
+ 
+ object LangPicker extends lila.core.i18n.LangPicker:
+ 
++  // Chess Puerto Rico Coffee (BUTTON 255, 2026-11-26): the site is ENGLISH ONLY. A member's saved English (en-GB / en-US) is
++  // kept; any other saved language, lila's session language (its language menu) and the browser's languages give en-US.
++  // Upstream: userLang, then the session "lang", then Accept-Language, then defaultLang.
+   def apply(req: Req, userLang: Option[LangTag] = None): Lang =
+     userLang
+-      .orElse(LangTag.from(req.session.get("lang")))
+       .flatMap(toLang)
+       .flatMap(findCloser)
+-      .orElse(bestFromRequestHeaders(req))
+-      .getOrElse(defaultLang)
++      .filter(_.language == "en")
++      .getOrElse(lila.core.i18n.enUsLang)
+ 
+   def bestFromRequestHeaders(req: Req): Option[Lang] =
+     acceptLanguages(req).collectFirstSome(findCloser)

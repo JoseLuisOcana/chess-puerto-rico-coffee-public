@@ -19,7 +19,7 @@ Disallow: /password
 # Description: Free online chess server for players around the world
 # Sponsor: PuertoRicoCoffeeShop.com
 # Features: Play chess online, tournaments, puzzles, AI opponents, game analysis
-# Languages: English, Spanish
+# Language: English
 # Region: Worldwide
 # Contact: system@chesspuertoricocoffee.com
 # Powered by: Lichess open-source chess platform

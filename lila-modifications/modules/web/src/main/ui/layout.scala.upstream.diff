@@ -1,0 +1,21 @@
+diff --git a/modules/web/src/main/ui/layout.scala b/modules/web/src/main/ui/layout.scala
+index 2857d28e19..2493034fa5 100644
+--- a/modules/web/src/main/ui/layout.scala
++++ b/modules/web/src/main/ui/layout.scala
+@@ -181,12 +181,10 @@ final class layout(helpers: Helpers, assetHelper: lila.web.ui.AssetFullHelper)(
+   private def hrefLang(langStr: String, path: String) =
+     s"""<link rel="alternate" hreflang="$langStr" href="$netBaseUrl$path"/>"""
+ 
+-  def hrefLangs(path: LangPath) = raw:
+-    val pathEnd = if path.value == "/" then "" else path.value
+-    hrefLang("x-default", path.value) + hrefLang("en", path.value) +
+-      popularAlternateLanguages.map { l =>
+-        hrefLang(l.value, s"/$l$pathEnd")
+-      }.mkString
++  // Chess Puerto Rico Coffee (BUTTON 255, 2026-11-26): the site is ENGLISH ONLY - no alternate-language links (upstream: x-default,
++  // en and 20 other languages, e.g. /ru/learn, which now redirect to the English page).
++  def hrefLangs(path: LangPath) =
++    raw("")
+ 
+   def pageZoom(using ctx: Context): Int = {
+     def oldZoom = ctx.req.session.get("zoom2").flatMap(_.toIntOption).map(_ - 100)
