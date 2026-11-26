@@ -80,13 +80,14 @@ limit_req_log_level warn;
 add_header Strict-Transport-Security "max-age=31536000" always;
 # 2026-10-02 (fix item 5): per-page SEO values consumed by chess-branding.conf.
 #  $chess_desc       replaces lila's generic default description. The homepage keeps
-#                    the custom USA / Puerto Rico wording; every other page that falls
+#                    its own worldwide wording (EN + ES, BUTTON 248); every other page that falls
 #                    back to lila's default gets its own text (no duplicate descriptions).
 #  $chess_ogtitle,   feed the OG block injected ONLY into pages where lila emits no OG
 #  $chess_og_url_tag tags (pages with native OG keep lila's own, per-page values).
 # og:url is built from $uri ONLY when the path is plain ASCII path characters: $uri is
 # percent-DECODED, so an unchecked $uri inside an HTML attribute is reflected XSS.
 set $chess_desc "Chess Puerto Rico Coffee is a free online chess server: play live games, solve puzzles, join tournaments and analyse your games. Sponsored by PuertoRicoCoffeeShop.com.";
+set $chess_desc_es "Servidor de ajedrez en línea gratuito. Juega al ajedrez en una interfaz simple. Sin registro, sin publicidad, sin necesidad de complementos. Juega contra la computadora, amigos u oponentes desconocidos.";  # BUTTON 248: lila's own Spanish text; the homepage sets its own
 set $chess_ogtitle "Chess Puerto Rico Coffee";
 set $chess_og_url_tag "";
 set $chess_jsonld "";  # Organization + WebSite JSON-LD, homepage only (fix item 8)
@@ -97,7 +98,7 @@ set $chess_signup_age "";  # /signup only: the required "13 or older" checkbox m
 if ($uri ~ "^[A-Za-z0-9/_.~@-]*$") {
         set $chess_og_url_tag '<meta property="og:url" content="https://chesspuertoricocoffee.com$uri" />';
 }
-if ($uri ~ "^/(es)?$") { set $chess_desc "Free online chess server for the USA and Puerto Rico. Play chess with friends, join tournaments, and challenge AI opponents. Sponsored by PuertoRicoCoffeeShop.com."; set $chess_jsonld '<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://chesspuertoricocoffee.com/#organization","name":"Chess Puerto Rico Coffee","url":"https://chesspuertoricocoffee.com/","email":"system@chesspuertoricocoffee.com","sponsor":{"@type":"Organization","name":"PuertoRicoCoffeeShop.com","url":"https://www.puertoricocoffeeshop.com/"},"logo":"https://chesspuertoricocoffee.com/prcoffee/logo-512.png"},{"@type":"WebSite","@id":"https://chesspuertoricocoffee.com/#website","name":"Chess Puerto Rico Coffee","url":"https://chesspuertoricocoffee.com/","inLanguage":"en","publisher":{"@id":"https://chesspuertoricocoffee.com/#organization"}}]}</script>'; set $chess_videos '<script defer src="/prcoffee/videos.js?v=20261008a"></script>'; }
+if ($uri ~ "^/(es)?$") { set $chess_desc "Free online chess server for players around the world. Play chess with friends, join tournaments, and challenge AI opponents. Sponsored by PuertoRicoCoffeeShop.com."; set $chess_desc_es "Servidor de ajedrez en línea gratuito para jugadores de todo el mundo. Juega con amigos, participa en torneos y desafía a la computadora. Patrocinado por PuertoRicoCoffeeShop.com."; set $chess_jsonld '<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://chesspuertoricocoffee.com/#organization","name":"Chess Puerto Rico Coffee","url":"https://chesspuertoricocoffee.com/","email":"system@chesspuertoricocoffee.com","sponsor":{"@type":"Organization","name":"PuertoRicoCoffeeShop.com","url":"https://www.puertoricocoffeeshop.com/"},"logo":"https://chesspuertoricocoffee.com/prcoffee/logo-512.png"},{"@type":"WebSite","@id":"https://chesspuertoricocoffee.com/#website","name":"Chess Puerto Rico Coffee","url":"https://chesspuertoricocoffee.com/","inLanguage":"en","publisher":{"@id":"https://chesspuertoricocoffee.com/#organization"}}]}</script>'; set $chess_videos '<script defer src="/prcoffee/videos.js?v=20261008a"></script>'; }
 if ($uri = /storm) { set $chess_desc "Puzzle Storm on Chess Puerto Rico Coffee: solve as many chess puzzles as you can before the clock runs out."; set $chess_ogtitle "Puzzle Storm - Chess Puerto Rico Coffee"; }
 if ($uri = /racer) { set $chess_desc "Puzzle Racer on Chess Puerto Rico Coffee: race other players to solve chess puzzles the fastest."; set $chess_ogtitle "Puzzle Racer - Chess Puerto Rico Coffee"; }
 if ($uri = /swiss) { set $chess_desc "Swiss chess tournaments on Chess Puerto Rico Coffee: every round you play an opponent with a similar score."; set $chess_ogtitle "Swiss Tournaments - Chess Puerto Rico Coffee"; }
@@ -147,11 +148,11 @@ Disallow: /password
 
 # AEO - Answer Engine Optimization
 # Site: Chess Puerto Rico Coffee (chesspuertoricocoffee.com)
-# Description: Free online chess server for the USA and Puerto Rico
+# Description: Free online chess server for players around the world
 # Sponsor: PuertoRicoCoffeeShop.com
 # Features: Play chess online, tournaments, puzzles, AI opponents, game analysis
 # Languages: English, Spanish
-# Region: USA, Puerto Rico
+# Region: Worldwide
 # Contact: system@chesspuertoricocoffee.com
 # Powered by: Lichess open-source chess platform
 
@@ -305,13 +306,46 @@ location = /es/faq {
         add_header Vary "Accept-Language, Cookie" always;
         add_header Strict-Transport-Security "max-age=31536000" always;
 }
+# BUTTON 248 (2026-11-25): Privacy + Terms in English and Spanish, same language rules as /about.
 location = /terms-of-service {
+        if ($prc_static_es) { return 302 /es/terms-of-service; }
         alias /var/www/vhosts/chesspuertoricocoffee.com/httpdocs/terms-of-service.html;
         default_type text/html;
+        charset utf-8;
+        add_header Content-Language en always;
+        add_header Set-Cookie $prc_lang_cookie always;
+        add_header Vary "Accept-Language, Cookie" always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+}
+location = /es/terms-of-service {
+        if ($arg_lang = en) { return 302 /terms-of-service?lang=en; }
+        alias /var/www/vhosts/chesspuertoricocoffee.com/httpdocs/es/terms-of-service.html;
+        default_type text/html;
+        charset utf-8;
+        add_header Content-Language es always;
+        add_header Set-Cookie $prc_lang_cookie always;
+        add_header Vary "Accept-Language, Cookie" always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
 }
 location = /privacy {
+        if ($prc_static_es) { return 302 /es/privacy; }
         alias /var/www/vhosts/chesspuertoricocoffee.com/httpdocs/privacy.html;
         default_type text/html;
+        charset utf-8;
+        add_header Content-Language en always;
+        add_header Set-Cookie $prc_lang_cookie always;
+        add_header Vary "Accept-Language, Cookie" always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+}
+location = /es/privacy {
+        if ($arg_lang = en) { return 302 /privacy?lang=en; }
+        alias /var/www/vhosts/chesspuertoricocoffee.com/httpdocs/es/privacy.html;
+        default_type text/html;
+        charset utf-8;
+        add_header Content-Language es always;
+        add_header Set-Cookie $prc_lang_cookie always;
+        add_header Vary "Accept-Language, Cookie" always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
 }
 location /api/contact {
         proxy_pass http://127.0.0.1:3001;

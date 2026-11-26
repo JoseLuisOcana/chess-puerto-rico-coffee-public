@@ -16,11 +16,11 @@ Disallow: /password
 
 # AEO - Answer Engine Optimization
 # Site: Chess Puerto Rico Coffee (chesspuertoricocoffee.com)
-# Description: Free online chess server for the USA and Puerto Rico
+# Description: Free online chess server for players around the world
 # Sponsor: PuertoRicoCoffeeShop.com
 # Features: Play chess online, tournaments, puzzles, AI opponents, game analysis
 # Languages: English, Spanish
-# Region: USA, Puerto Rico
+# Region: Worldwide
 # Contact: system@chesspuertoricocoffee.com
 # Powered by: Lichess open-source chess platform
 

@@ -5,7 +5,7 @@
   "display": "standalone",
   "background_color": "#161512",
   "theme_color": "#161512",
-  "description": "Free online chess server for the USA and Puerto Rico. Play chess with friends, join tournaments, and challenge AI opponents. Sponsored by PuertoRicoCoffeeShop.com.",
+  "description": "Free online chess server for players around the world. Play chess with friends, join tournaments, and challenge AI opponents. Sponsored by PuertoRicoCoffeeShop.com.",
   "icons": [
     {
       "src": "/prcoffee/favicon-32.png",
