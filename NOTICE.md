@@ -261,6 +261,9 @@ Custom HTML pages for the deployment:
 - `public/static/contact-us.html`
 - `public/static/privacy.html`
 - `public/static/terms-of-service.html`
+- `public/static/faq.html` and the Spanish pages `public/static/es/` (about, contact-us, faq, privacy, terms-of-service). Since
+  2026-11 the Spanish pages are neutral Spanish: `lang="es"` and "Patrocinado por" (also in the sponsor bar that
+  `nginx/snippets-chess-branding.conf` adds to lila's Spanish pages).
 
 ## 5. Direct modifications to lila source code
 
