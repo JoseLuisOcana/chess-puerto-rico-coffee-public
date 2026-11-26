@@ -78,6 +78,7 @@ limit_req_log_level warn;
 # 2026-10-02 (fix item 9): HSTS, 1 year, no includeSubDomains, no preload. Repeated inside every
 # location that has its own add_header (/ and /tv): nginx does NOT inherit server-level add_header there.
 add_header Strict-Transport-Security "max-age=31536000" always;
+include /etc/nginx/snippets/chess-security-headers.conf;   # BUTTON 260: nosniff + X-Frame-Options (map in conf.d)
 # 2026-10-02 (fix item 5): per-page SEO values consumed by chess-branding.conf.
 #  $chess_desc       replaces lila's generic default description. The homepage keeps
 #                    its own worldwide wording (EN + ES, BUTTON 248); every other page that falls
@@ -95,6 +96,11 @@ set $chess_videos "";  # homepage "Chess Videos" strip loader, homepage only (20
 set $chess_signup_js "";   # /signup only: age-confirmation helper script (2026-10-03)
 set $chess_signup_age "";  # /signup only: the required "13 or older" checkbox markup (2026-10-03)
 # BUTTON 247 (2026-11-25): the 13+ box is part of lila's own sign-up form now - no nginx-injected box, no signup.js
+# BUTTON 260 (2026-11-26, owner: a simple bot check on sign-up, no third party): /prcoffee/signup-check.js on /signup only sets
+# the cookie prc_su=1; a POST /signup without it is sent back to the form (303 /signup?check=1, the script then says why;
+# $chess_signup_blocked: conf.d/chess-security-headers-map.conf). Nothing reaches lila.
+if ($uri = /signup) { set $chess_signup_js '<script src="/prcoffee/signup-check.js?v=20261126" defer></script>'; }
+if ($chess_signup_blocked) { return 303 "/signup?check=1&$args"; }
 if ($uri ~ "^[A-Za-z0-9/_.~@-]*$") {
         set $chess_og_url_tag '<meta property="og:url" content="https://chesspuertoricocoffee.com$uri" />';
 }
@@ -132,6 +138,7 @@ location ~ ^/(socket/|play/|watch/|lobby/socket|api/socket|round-next|analysis/s
         # not inherit the server's, so HSTS is repeated.
         proxy_set_header Accept-Language $prc_accept_language;
         add_header Strict-Transport-Security "max-age=31536000" always;
+        include /etc/nginx/snippets/chess-security-headers.conf;   # BUTTON 260: nosniff + X-Frame-Options (map in conf.d)
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
@@ -285,6 +292,7 @@ location = /about {
         default_type text/html;
         charset utf-8;
         add_header Content-Language en always;
+        include /etc/nginx/snippets/chess-security-headers.conf;   # BUTTON 260: nosniff + X-Frame-Options (map in conf.d)
         add_header Strict-Transport-Security "max-age=31536000" always;
 }
 location = /faq {
@@ -292,6 +300,7 @@ location = /faq {
         default_type text/html;
         charset utf-8;
         add_header Content-Language en always;
+        include /etc/nginx/snippets/chess-security-headers.conf;   # BUTTON 260: nosniff + X-Frame-Options (map in conf.d)
         add_header Strict-Transport-Security "max-age=31536000" always;
 }
 # BUTTON 248 (2026-11-25): Privacy + Terms (English only since BUTTON 254).
@@ -300,6 +309,7 @@ location = /terms-of-service {
         default_type text/html;
         charset utf-8;
         add_header Content-Language en always;
+        include /etc/nginx/snippets/chess-security-headers.conf;   # BUTTON 260: nosniff + X-Frame-Options (map in conf.d)
         add_header Strict-Transport-Security "max-age=31536000" always;
 }
 location = /privacy {
@@ -307,6 +317,7 @@ location = /privacy {
         default_type text/html;
         charset utf-8;
         add_header Content-Language en always;
+        include /etc/nginx/snippets/chess-security-headers.conf;   # BUTTON 260: nosniff + X-Frame-Options (map in conf.d)
         add_header Strict-Transport-Security "max-age=31536000" always;
 }
 location /api/contact {
@@ -320,6 +331,7 @@ location = /contact-us {
         default_type text/html;
         charset utf-8;
         add_header Content-Language en always;
+        include /etc/nginx/snippets/chess-security-headers.conf;   # BUTTON 260: nosniff + X-Frame-Options (map in conf.d)
         add_header Strict-Transport-Security "max-age=31536000" always;
 }
 # BUTTON 254 (2026-11-26, owner: "the chess site is ENGLISH ONLY"): our Spanish static pages -> their English page, also
@@ -328,6 +340,7 @@ location = /contact-us {
 # browser does not keep them, so an undo works at once; own add_header, so HSTS is repeated.
 location ~* ^/es/(?:about|faq|contact-us|privacy|terms-of-service)/?$ {
         add_header Cache-Control "no-store" always;
+        include /etc/nginx/snippets/chess-security-headers.conf;   # BUTTON 260: nosniff + X-Frame-Options (map in conf.d)
         add_header Strict-Transport-Security "max-age=31536000" always;
         return 301 https://chesspuertoricocoffee.com$prc_es_static_target;
 }
@@ -336,6 +349,7 @@ location ~* ^/es/(?:about|faq|contact-us|privacy|terms-of-service)/?$ {
 # never percent-decoded, plain URL characters only); anything else -> the homepage.
 location ~* ^/(?:af|an|ar|ast|av|az|be|bg|bn|br|bs|ca|ckb|co|cs|cv|cy|da|de|el|en|eo|es|et|eu|fa|fi|fo|fr|fy|ga|gd|gl|gsw|gu|he|hi|hr|hu|hy|ia|id|is|it|ja|jbo|ka|kab|kk|kmr|kn|ko|la|lb|lt|lv|mg|mk|ml|mn|mr|nb|ne|nl|nn|pi|pl|ps|pt|ro|ru|ry|sk|sl|so|sq|sr|sv|sw|ta|th|tk|tl|tok|tr|uk|ur|uz|vi|zh|zu)(?:/|$) {
         add_header Cache-Control "no-store" always;
+        include /etc/nginx/snippets/chess-security-headers.conf;   # BUTTON 260: nosniff + X-Frame-Options (map in conf.d)
         add_header Strict-Transport-Security "max-age=31536000" always;
         if ($prc_lang_target = "") { return 301 https://chesspuertoricocoffee.com/; }
         return 301 https://chesspuertoricocoffee.com$prc_lang_target;
@@ -343,6 +357,7 @@ location ~* ^/(?:af|an|ar|ast|av|az|be|bg|bn|br|bs|ca|ckb|co|cs|cv|cy|da|de|el|e
 # BUTTON 254: lila's per-language community blog feeds (/blog/community/es.atom ...) -> the site's community feed.
 location ~ "^/blog/community/[A-Za-z0-9-]{2,6}\.atom$" {
         add_header Cache-Control "no-store" always;
+        include /etc/nginx/snippets/chess-security-headers.conf;   # BUTTON 260: nosniff + X-Frame-Options (map in conf.d)
         add_header Strict-Transport-Security "max-age=31536000" always;
         return 301 https://chesspuertoricocoffee.com/blog/community.atom;
 }
