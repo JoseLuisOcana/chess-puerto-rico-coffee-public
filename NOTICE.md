@@ -264,6 +264,10 @@ Custom HTML pages for the deployment:
 - `public/static/faq.html` and the Spanish pages `public/static/es/` (about, contact-us, faq, privacy, terms-of-service). Since
   2026-11 the Spanish pages are neutral Spanish: `lang="es"` and "Patrocinado por" (also in the sponsor bar that
   `nginx/snippets-chess-branding.conf` adds to lila's Spanish pages).
+- (2026-11) The static pages load their two fonts from this site, not from Google Fonts: `public/static/prcoffee/fonts.css` (Google's
+  own @font-face rules for the latin + latin-ext subsets, addresses changed) and `public/static/prcoffee/fonts/` - Playfair Display and
+  Source Sans 3, unmodified woff2 files as served by Google Fonts, under the SIL Open Font License 1.1 (licence texts next to them).
+  The vhost serves `/prcoffee/fonts/` with the font/woff2 type.
 
 ## 5. Direct modifications to lila source code
 
