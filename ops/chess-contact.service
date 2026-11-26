@@ -6,12 +6,30 @@ Wants=postfix.service
 
 [Service]
 Type=simple
-WorkingDirectory=/var/www/vhosts/chesspuertoricocoffee.com/contact-api
+# BUTTON 259 (2026-11-26, owner; Codex review item 09): runs as its own unprivileged user, not root. The code is root-owned and
+# read-only in /opt/chess/contact-api. The SMTP login comes from /etc/chess-contact.env (root 600), which systemd reads for it
+# (drop-in smtp.conf) - the service user cannot read that file itself.
+User=chess-contact
+Group=chess-contact
+WorkingDirectory=/opt/chess/contact-api
 ExecStart=/usr/bin/node server.js
 Environment=NODE_ENV=production
 Restart=always
 RestartSec=5
-User=root
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 SyslogIdentifier=chess-contact
 
 [Install]
