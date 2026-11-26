@@ -87,6 +87,12 @@ source-disclosure requirements.
   parameter, so nginx sets the Accept-Language it forwards to lila, and the static pages pick their
   language from the same signal (or from a browser whose first language is Spanish). The 13+ box and the
   homepage extras also apply to lila's language-prefixed URLs (`/es/signup`, `/es`).
+- (2026-11) **English first:** the browser's language is no longer used. The language lila renders is
+  `?lang=es|en`, else a lila language address (`/es`, `/es/training`, `/de/study` ...), else the remembered
+  choice (cookie `prclang`, set by `?lang=` and by lila's own language menu), else English. lila's language
+  menu (`POST /translation/select`) has its own location in the vhost: it also sets `prclang` and sends the
+  visitor back without a language prefix and without `?lang=`. The static pages show Spanish only for
+  `?lang=es` or `prclang=es`; the `/es/...` pages always work.
 
 ## 2. Configuration
 

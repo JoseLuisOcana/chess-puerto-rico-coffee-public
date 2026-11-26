@@ -119,6 +119,12 @@ location ~ ^/(socket/|play/|watch/|lobby/socket|api/socket|round-next|analysis/s
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host chesspuertoricocoffee.com;
+        # BUTTON 249 (2026-11-26, English first): /challenge/<id> pages also come through here - same language rule as
+        # location / (conf.d/chess-lang-map.conf; websockets ignore it) and the same ?lang= cookie. A location with its
+        # own add_header does not inherit the server's, so HSTS is repeated.
+        proxy_set_header Accept-Language $prc_accept_language;
+        add_header Set-Cookie $prc_lang_cookie always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
@@ -277,7 +283,7 @@ location = /about {
         add_header Strict-Transport-Security "max-age=31536000" always;
 }
 location = /es/about {
-        if ($arg_lang = en) { return 302 /about?lang=en; }
+        if ($prc_arg = en) { return 302 /about?lang=en; }
         alias /var/www/vhosts/chesspuertoricocoffee.com/httpdocs/es/about.html;
         default_type text/html;
         charset utf-8;
@@ -297,7 +303,7 @@ location = /faq {
         add_header Strict-Transport-Security "max-age=31536000" always;
 }
 location = /es/faq {
-        if ($arg_lang = en) { return 302 /faq?lang=en; }
+        if ($prc_arg = en) { return 302 /faq?lang=en; }
         alias /var/www/vhosts/chesspuertoricocoffee.com/httpdocs/es/faq.html;
         default_type text/html;
         charset utf-8;
@@ -318,7 +324,7 @@ location = /terms-of-service {
         add_header Strict-Transport-Security "max-age=31536000" always;
 }
 location = /es/terms-of-service {
-        if ($arg_lang = en) { return 302 /terms-of-service?lang=en; }
+        if ($prc_arg = en) { return 302 /terms-of-service?lang=en; }
         alias /var/www/vhosts/chesspuertoricocoffee.com/httpdocs/es/terms-of-service.html;
         default_type text/html;
         charset utf-8;
@@ -338,7 +344,7 @@ location = /privacy {
         add_header Strict-Transport-Security "max-age=31536000" always;
 }
 location = /es/privacy {
-        if ($arg_lang = en) { return 302 /privacy?lang=en; }
+        if ($prc_arg = en) { return 302 /privacy?lang=en; }
         alias /var/www/vhosts/chesspuertoricocoffee.com/httpdocs/es/privacy.html;
         default_type text/html;
         charset utf-8;
@@ -364,7 +370,7 @@ location = /contact-us {
         add_header Strict-Transport-Security "max-age=31536000" always;
 }
 location = /es/contact-us {
-        if ($arg_lang = en) { return 302 /contact-us?lang=en; }
+        if ($prc_arg = en) { return 302 /contact-us?lang=en; }
         alias /var/www/vhosts/chesspuertoricocoffee.com/httpdocs/es/contact-us.html;
         default_type text/html;
         charset utf-8;
@@ -393,7 +399,7 @@ location = /swag {
 }
 # 2026-10-02 (fix item 6a): lila's /contact is the upstream Lichess contact page.
 location = /contact {
-        return 301 https://chesspuertoricocoffee.com/contact-us;
+        return 301 https://chesspuertoricocoffee.com/contact-us$is_args$args;  # BUTTON 249: keeps ?lang=
 }
 # 2026-10-02 (fix item 8): site-owned static assets (branding CSS, logo) in httpdocs/prcoffee/.
 # Upload the 512x512 logo as httpdocs/prcoffee/logo-512.png - until it exists, the logo URL
@@ -484,6 +490,27 @@ location ^~ /api/puzzle/batch/ {
 # (a changing folder name, no fixed sub_filter can rewrite it): that VERSIONED path serves our logo instead.
 location ~ ^/assets/_[A-Za-z0-9]+/logo/lichess-tile-wide\.png$ {
         rewrite ^ /prcoffee/logo-512.png last;
+}
+# BUTTON 249 (2026-11-26, English first): lila's own language menu posts here (form field lang=<code>). Same proxy as
+# location /, plus our prclang cookie for the chosen language ($prc_menu_cookie in conf.d/chess-lang-map.conf reads the
+# small form body - kept in ONE memory buffer for that), so the static pages and lila's language addresses follow the
+# menu too; lila's 303 goes back without a language prefix and without ?lang= ($prc_menu_location). No page, no
+# branding. Own add_header, so HSTS is repeated.
+location = /translation/select {
+        client_max_body_size 4k;
+        client_body_buffer_size 16k;
+        client_body_in_single_buffer on;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host chesspuertoricocoffee.com;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Accept-Language $prc_accept_language;
+        proxy_hide_header Location;
+        add_header Location $prc_menu_location;
+        add_header Set-Cookie $prc_menu_cookie;
+        add_header Strict-Transport-Security "max-age=31536000" always;
 }
 location / {
         proxy_pass http://127.0.0.1:8080;
