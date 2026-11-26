@@ -162,6 +162,10 @@ source-disclosure requirements.
 - (2026-10) **lila_push** VAPID subject changed to the site's own address
   (`docker/compose.yml`); MongoDB healthcheck script `docker/scripts/replica-set.js`
   enables mongod `quiet` mode.
+- (2026-11) **Own web-push (VAPID) key pair**: lila-docker's committed `conf/private.pem` is a public demo key; this site
+  made its own pair. The private key lives outside the repository (root-only); `conf/private.pem` is a symlink to it, so
+  `docker/compose.yml` is unchanged; lila's `push.web.vapid_public_key` holds the new public key (`docker/conf/lila.conf.example`
+  shows a placeholder and how to make a pair).
 - (2026-10) **Prebuilt applications** (`docker/compose.yml`): lila and lila-fishnet no longer run
   through `sbt run`. They are packaged with sbt-native-packager (`stage`) by two one-off build services
   (`lila_build`, `lila_fishnet_build`, compose profile `build`), copied to `prebuilt/<app>/builds/<time>-<commit>/`

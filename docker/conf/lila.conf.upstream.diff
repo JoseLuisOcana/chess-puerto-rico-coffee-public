@@ -27,7 +27,7 @@
  game.gifUrl = "http://lila_gif:6175"
  
  search.enabled = true
-@@ -23,18 +24,26 @@
+@@ -23,18 +24,30 @@
  
  memo.picfit.endpointGet = ${?LILA_URL}
  memo.picfit.endpointPost = "http://picfit:3001"
@@ -58,11 +58,15 @@
 +push.firebase.mobile.jsonPath = ""
  push.web.url = "http://lila_push:9054"
 -push.web.vapid_public_key = "BDTVzVZ3_f83JgH1SJmZrhg-FNZ36Sixc_zrR1-1ZGVHUPmFeU6Q_-JQLN8NF5niYW_1jRU47aPczYA0FbgUCus"
-+push.web.vapid_public_key = "BDTVzVZ3_f83JgH1SJmZrhg-FNZ36Sixc_zrR1-1ZGVHUPmFeU6Q_-JQLN8NF5niYW_1jRU47aPczYA0FbgUCus="
++# Web push (VAPID): use your OWN key pair, never lila-docker's committed demo conf/private.pem. Make one with
++#   openssl ecparam -name prime256v1 -genkey -noout -out <a root-only path outside the repo>/private.pem
++# point conf/private.pem at it (this site: a symlink to /etc/chess-vapid/private.pem, 600 root), and put its public point here
++# (uncompressed, base64url without padding).
++push.web.vapid_public_key = "REPLACE_WITH_YOUR_OWN_VAPID_PUBLIC_KEY"
  
  swiss.bbpairing = "/opt/bbpPairings/bbpPairings.exe"
  
-@@ -48,18 +57,41 @@
+@@ -48,18 +61,41 @@
  plan.stripe.keys.secret = "sk_test_123"
  plan.payPal.keys.public = "sb"
  
