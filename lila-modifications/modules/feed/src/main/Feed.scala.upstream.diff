@@ -1,0 +1,15 @@
+diff --git a/modules/feed/src/main/Feed.scala b/modules/feed/src/main/Feed.scala
+index 58207f1d75..bb83e8fd61 100644
+--- a/modules/feed/src/main/Feed.scala
++++ b/modules/feed/src/main/Feed.scala
+@@ -78,7 +78,9 @@ final class FeedApi(
+     import jsonView.given
+     for
+       updates <- cache.store.get {}
+-      withRendered = updates.take(7).map(up => (up, feedMarkdown(up)))
++      // Chess Puerto Rico Coffee (BUTTON 253): only PUBLISHED posts (public + date reached), like /feed, /feed.atom and the
++      // homepage box - upstream lists the 7 newest including hidden drafts and future posts
++      withRendered = updates.filter(_.published).take(7).map(up => (up, feedMarkdown(up)))
+     yield Json.toJson(withRendered)
+ 
+   def recentPublished = cache.store.get {}.map(_.filter(_.published))

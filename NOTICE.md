@@ -351,9 +351,15 @@ Puerto Rico Spanish: "computadora" instead of "ordenador" in 27 Spanish (es-ES) 
 `learn`, `search`, `site`, `study`), with the grammar it needs ("la computadora", "análisis por computadora", ...). Other languages are
 unchanged ("ordenador" stays correct in Galician and Asturian).
 
+### modules/feed/src/main/Feed.scala (2026-11)
+
+`/api/feed` lists only PUBLISHED news posts (public and with their date reached), like `/feed`, `/feed.atom` and the homepage box -
+upstream's `FeedApi.recentJson` listed the 7 newest posts including hidden drafts and future posts (one line:
+`updates.filter(_.published).take(7)`).
+
 Each file is in `lila-modifications/` with an `.upstream.diff` generated with
 `git diff` against the deployed upstream lila commit (`eb024cba`, deployed 2026-11-25;
-previously `f5b261e` from 2026-10-08, and `f9e0e4c` before that). These twenty files carry the only
+previously `f5b261e` from 2026-10-08, and `f9e0e4c` before that). These twenty-one files carry the only
 source changes. On the 2026-11-25 upgrade the first ten were re-applied on top of `eb024cba`
 (one import line in `TournamentScheduler.scala` merged by hand; no change in behaviour); the other ten
 (`SecurityForm.scala`, `AuthUi.scala` and the eight `es-ES.xml` files) were added later the same day.
