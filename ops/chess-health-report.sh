@@ -51,6 +51,14 @@
 #   - lila-docker containers: any not running, unhealthy, or with RestartCount > 0 — except EXPECTED_STOPPED below:
 #     elasticvue (Elasticsearch web UI) and mailpit (dev mail catcher; real mail goes through IONOS) are dev tools in the
 #     active `search`/`email` profiles that have been stopped on purpose since 2026-09-13; they are listed, not flagged.
+#     BUTTON 257 (2026-11-26, owner; Codex review item 17): it also FAILS (a ⚠️ item whose text starts with "FAIL:") when a
+#     service of REQUIRED_SERVICES has no container at all, when `docker ps` / `docker inspect` fails or times out, when
+#     docker lists 0 containers, and when one of the optional tools in MUST_STAY_OFF (Mongo Express, Prometheus, InfluxDB -
+#     owner 2026-11-26: "Keep the three optional tools closed") is running. "all OK" only when none of that happened.
+#     One-off containers (`docker compose run`, label com.docker.compose.oneoff=True) never count as a service; the inventory is
+#     read twice (10 s apart) before a docker failure counts; anything LISTENING on 8081/9090/8086 (the optional tools' ports) is a
+#     FAIL too, whatever started it. A --dry-run takes its own lock (/run/lock/chess-health-report.dry.lock), never the Monday run's.
+#     Test hook (with --dry-run): CHESS_HR_TEST_DOCKER = another program in place of `docker` for this section.
 #     Restarts that line up with a Docker/containerd package update (added 2026-10-20) are listed as "ℹ️ restarted by
 #     Docker update (normal)", not flagged: upgrading docker-ce or containerd.io restarts dockerd and every container,
 #     and one that loses the start-up race (MongoDB or Elasticsearch not ready yet) is restarted by its `unless-stopped`
@@ -136,11 +144,13 @@
 
 set -euo pipefail
 if [[ $EUID -ne 0 ]]; then echo "chess-health-report: run as root" >&2; exit 1; fi
-exec 9>/run/lock/chess-health-report.lock
-flock -n 9 || { echo "$(date -u +%FT%TZ) SKIP another run holds the lock" >> /var/log/chess-health-report.log; exit 0; }
+HR_LOCK=/run/lock/chess-health-report.lock   # BUTTON 257: a --dry-run uses its own lock, so a check can never make the Monday run SKIP
+case " $* " in *" --dry-run "*) HR_LOCK=/run/lock/chess-health-report.dry.lock;; esac
+exec 9>"$HR_LOCK"
+flock -n 9 || { echo "$(date -u +%FT%TZ) SKIP another run holds the lock ($HR_LOCK)" >> /var/log/chess-health-report.log; exit 0; }
 
 exec python3 - "$@" <<'PY'
-import argparse, datetime as dt, glob, gzip, hashlib, ipaddress, json, os, re, shutil, smtplib, socket, ssl, subprocess, sys
+import argparse, datetime as dt, glob, gzip, hashlib, ipaddress, json, os, re, shutil, smtplib, socket, ssl, subprocess, sys, time
 import urllib.error, urllib.request
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
@@ -157,6 +167,10 @@ DRIFT_GRACE_DAYS = 3.5         # check-le-cert-renewal-all.sh: cron "0 13 */3 * 
 BACKUP_REPO = "/home/ADMIN/projects/server-config-backup"   # public copy: path of the private config-backup repo
 SW_NGINX_PIN = "/etc/apt/preferences.d/no-sw-nginx"
 EXPECTED_STOPPED = {"elasticvue": "Elasticsearch web UI, dev tool", "mailpit": "dev mail catcher; real mail goes via IONOS"}
+# BUTTON 257: every compose service the site needs (a missing one = FAIL), and the optional tools that must stay off.
+REQUIRED_SERVICES = ("caddy", "elasticsearch", "fishnet_analysis", "fishnet_play", "lila", "lila_engine", "lila_fishnet", "lila_gif",
+                     "lila_push", "lila_search_app", "lila_search_ingestor", "lila_ws", "mongodb", "picfit", "redis")
+MUST_STAY_OFF = {"mongo_express_primary": "Mongo Express (no login)", "prometheus": "Prometheus", "influxdb": "InfluxDB (default password)"}
 AST = dt.timezone(dt.timedelta(hours=-4))   # America/Puerto_Rico, no DST
 UTC = dt.timezone.utc
 
@@ -484,15 +498,76 @@ for l in read_all(KERN_LOG):
 
 out = [f"CONTAINERS ({COMPOSE_PROJECT})"]
 CONTAINERS_JSON = os.environ.get("CHESS_HR_TEST_CONTAINERS_JSON")   # test hook (dry-run only): a `docker inspect` array
+DOCKER = os.environ.get("CHESS_HR_TEST_DOCKER", "docker")   # test hook (dry-run only), BUTTON 257
+docker_err = []   # BUTTON 257: a failed docker command is a FAIL, never an empty "all OK" list
+
+
+def docker_run(argv):
+    try:
+        p = subprocess.run([DOCKER, *argv], capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        docker_err.append(f"`docker {argv[0]}` could not run: {type(e).__name__} {str(e)[:100]}"); return None
+    if p.returncode != 0:
+        docker_err.append(f"`docker {argv[0]}` failed (exit {p.returncode}): {(p.stderr or p.stdout).strip()[:140]}"); return None
+    return p.stdout
+
+
+def inventory():   # -> (ids, cinfo); a failure goes to docker_err
+    o = docker_run(["ps", "-aq", "--filter", f"label=com.docker.compose.project={COMPOSE_PROJECT}"])
+    if o is None:
+        return [], []
+    ids = o.split()
+    if not ids:
+        return [], []
+    o = docker_run(["inspect", *ids])
+    if o is None:
+        return ids, []
+    try:
+        ci = json.loads(o or "[]")
+    except ValueError as e:
+        docker_err.append(f"`docker inspect` printed no valid JSON: {str(e)[:100]}"); return ids, []
+    if not isinstance(ci, list) or not all(isinstance(c, dict) and isinstance(c.get("Id"), str) and isinstance(c.get("State"), dict)
+                                           and isinstance(c["State"].get("Status"), str) and isinstance(c["State"].get("StartedAt"), str)
+                                           and isinstance(c.get("Name"), str) for c in ci):
+        docker_err.append("`docker inspect` printed an unexpected JSON shape"); return ids, []
+    if sorted(i for i in ids if any(c["Id"].startswith(i) for c in ci)) != sorted(ids) or len(ci) != len(ids):
+        docker_err.append(f"`docker inspect` described {len(ci)} of the {len(ids)} listed containers (one replaced meanwhile?)"); return ids, []
+    return ids, ci
+
+
 if CONTAINERS_JSON:
     cinfo = json.load(open(CONTAINERS_JSON)); ids = [c["Id"] for c in cinfo]
 else:
-    ids = subprocess.run(["docker", "ps", "-aq", "--filter", f"label=com.docker.compose.project={COMPOSE_PROJECT}"],
-                         capture_output=True, text=True).stdout.split()
-    cinfo = json.loads(subprocess.run(["docker", "inspect", *ids], capture_output=True, text=True).stdout or "[]")
-bad = 0; expected_down = []; by_update = []; by_reboot = []
+    ids, cinfo = inventory()
+    if docker_err:   # one retry: a Docker update or a container replaced between `ps` and `inspect` must not fail by itself
+        first = list(docker_err); docker_err.clear(); time.sleep(10)
+        ids, cinfo = inventory()
+        if docker_err:
+            docker_err[:0] = [f"(first try) {e}" for e in first]
+bad = 0; expected_down = []; by_update = []; by_reboot = []; services = {}; oneoffs = []
 for c in cinfo:
     name = c["Name"].lstrip("/").replace(f"{COMPOSE_PROJECT}-", ""); stt = c["State"]
+    labels = (c.get("Config") or {}).get("Labels") or {}
+    svc = labels.get("com.docker.compose.service")
+    oneoff = str(labels.get("com.docker.compose.oneoff", "")).lower() == "true"
+    if not svc:   # BUTTON 257: never guess a service from a name - an unlabelled container counts for nothing and is a FAIL
+        bad += 1
+        out.append(warn(f"FAIL: container {c['Name'].lstrip('/')} of {COMPOSE_PROJECT} has no compose service label") +
+                   f"{name:24} {stt['Status']} - NO compose service label (not counted as any service)")
+        continue
+    if not oneoff:
+        services.setdefault(svc, []).append(stt["Status"])
+    if svc in MUST_STAY_OFF:
+        if stt["Status"] in ("running", "restarting", "paused"):
+            bad += 1
+            out.append(warn(f"FAIL: {svc} ({MUST_STAY_OFF[svc]}) is {stt['Status'].upper()} - the optional tools must stay closed") +
+                       f"{name:24} {stt['Status']} - optional tool, must stay CLOSED (stop it: docker stop {c['Name'].lstrip('/')})")
+        else:
+            expected_down.append(f"{name:24} {stt['Status']} - optional tool, closed (as it must be)")
+        continue
+    if oneoff:   # `docker compose run` one-offs: listed, never a service, never a health problem
+        oneoffs.append(f"ℹ️ {name:24} {stt['Status']} - a one-off `docker compose run` container (not counted as a service)")
+        continue
     health = (stt.get("Health") or {}).get("Status", "-"); rc = c.get("RestartCount", 0)
     if name.rsplit("-", 1)[0] in EXPECTED_STOPPED and stt["Status"] == "exited" and rc == 0:
         expected_down.append(f"{name:24} stopped on purpose ({EXPECTED_STOPPED[name.rsplit('-', 1)[0]]})"); continue
@@ -513,10 +588,38 @@ for c in cinfo:
         why += f", OUT OF MEMORY (kernel OOM kill {oom:%a %b %d %H:%M:%S} AST)" if rc > 0 and oom else ""
         out.append(warn(f"container {name}: {stt['Status']}, health {health}, restarts {rc}") +
                    f"{name:24} {stt['Status']}, health {health}, restarts {rc}{why}")
-out.insert(1, f"{len(ids)} containers: {len(ids) - bad - len(expected_down) - len(by_update) - len(by_reboot)} running with 0 restarts" +
+for e in docker_err:
+    out.append(warn(f"FAIL: {e}") + f"FAIL: {e}")
+ports = {8081: "Mongo Express", 9090: "Prometheus", 8086: "InfluxDB"}   # anything listening there = an optional tool is open
+port_err = False
+try:
+    ssout = subprocess.run(["ss", "-ltnH"], capture_output=True, text=True, timeout=30)
+    if ssout.returncode != 0:
+        raise OSError(f"exit {ssout.returncode}")
+    for l in ssout.stdout.splitlines():
+        f = l.split()
+        if len(f) >= 4 and f[3].rsplit(":", 1)[-1].isdigit() and int(f[3].rsplit(":", 1)[-1]) in ports:
+            pn = int(f[3].rsplit(":", 1)[-1])
+            out.append(warn(f"FAIL: port {pn} ({ports[pn]}'s) is LISTENING on {f[3]} - the optional tools must stay closed") +
+                       f"FAIL: port {pn} ({ports[pn]}'s) is listening on {f[3]}")
+except (OSError, subprocess.TimeoutExpired) as e:
+    port_err = True
+    out.append(warn(f"FAIL: cannot list listening ports (ss): {str(e)[:80]}") + f"FAIL: cannot list listening ports (ss): {str(e)[:80]}")
+if not ids and not docker_err:
+    out.append(warn(f"FAIL: docker lists 0 containers for {COMPOSE_PROJECT}") + f"FAIL: docker lists 0 containers for {COMPOSE_PROJECT}")
+missing = [s for s in REQUIRED_SERVICES if s not in services]
+if missing and not docker_err:
+    out.append(warn(f"FAIL: required chess service(s) MISSING (no container): {', '.join(missing)}") +
+               f"FAIL: {len(missing)} of {len(REQUIRED_SERVICES)} required services have NO container: {', '.join(missing)}")
+elif missing:
+    out.append(f"  ({len(missing)} required services not seen - docker failed, see above)")
+fail = bool(bad or missing or docker_err or not ids or port_err or any("FAIL: port" in l for l in out))
+out.insert(1, (f"{len(ids)} containers listed, running count UNKNOWN (docker failed)" if docker_err else
+               f"{len(cinfo)} containers: {len(cinfo) - bad - len(expected_down) - len(by_update) - len(by_reboot) - len(oneoffs)} running with 0 restarts") +
            (f", {len(by_update)} restarted by Docker update (normal)" if by_update else "") +
-           (f", {len(by_reboot)} restarted while the server rebooted (normal)" if by_reboot else "") + ("" if bad else " — all OK"))
-out += by_update + by_reboot
+           (f", {len(by_reboot)} restarted while the server rebooted (normal)" if by_reboot else "") +
+           (f"; all {len(REQUIRED_SERVICES)} required services present, optional tools closed — all OK" if not fail else ""))
+out += by_update + by_reboot + oneoffs
 out += [f"  {x}" for x in expected_down]
 sections.append(out)
 
