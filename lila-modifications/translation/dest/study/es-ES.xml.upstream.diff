@@ -1,8 +1,8 @@
 diff --git a/translation/dest/study/es-ES.xml b/translation/dest/study/es-ES.xml
-index 6ca97a4daf..99a35eac81 100644
+index 21b69017c1..0b0353c960 100644
 --- a/translation/dest/study/es-ES.xml
 +++ b/translation/dest/study/es-ES.xml
-@@ -48,7 +48,7 @@
+@@ -47,7 +47,7 @@
    <string name="commentThisMove">Comentar este movimiento</string>
    <string name="annotateWithGlyphs">Anotar con iconos</string>
    <string name="theChapterIsTooShortToBeAnalysed">El capítulo es demasiado corto para analizarlo.</string>

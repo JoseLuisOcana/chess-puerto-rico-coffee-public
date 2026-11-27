@@ -156,6 +156,11 @@ source-disclosure requirements.
   this deployment runs lila in development mode, where upstream's fix does not apply). A second block, refusing
   websocket connections to Puzzle Racer (`/racer/...`, GHSA-2rpf-mmrc-v68p), was in place from 2026-11-24 until
   2026-11-25, when the upgraded lila and lila-ws carrying the fix went live; it has been removed.
+- (2026-11) **Advisory guard** (`nginx/conf.d/chess-advisory-guard-map.conf` + one server-level rule in the vhost), since
+  2026-11-26: refuses (400) a `hook_like` value that is not a game id (GHSA-3m7f), a socket id (`sri`) that is not 1-32 of
+  `[A-Za-z0-9_-]`, and the "Lichess Mobile" User-Agent (GHSA-rxpx). lila and lila-ws carrying the upstream fixes (lila
+  `c45261e` + `2fc00d8`, lila-ws `bee9229`) are live since 2026-11-26 22:11 AST; the guard stays on for now and will be
+  removed in a later, separate change.
 - (2026-10) **picfit** (image uploads/thumbnails; `docker/compose.yml`,
   `docker/conf/picfit.json.example`): host port publication removed (picfit is
   reached only over the internal Docker network) and `restart: unless-stopped`
@@ -380,12 +385,14 @@ another saved language, lila's session language (its language menu) and the brow
 language list (and its "accepted" marks) only English.
 
 Each file is in `lila-modifications/` with an `.upstream.diff` generated with
-`git diff` against the deployed upstream lila commit (`eb024cba`, deployed 2026-11-25;
-previously `f5b261e` from 2026-10-08, and `f9e0e4c` before that). These twenty-five files carry the only
+`git diff` against the deployed upstream lila commit (`2fc00d8`, deployed 2026-11-26; previously `eb024cba` from
+2026-11-25, `f5b261e` from 2026-10-08, and `f9e0e4c` before that). These twenty-five files carry the only
 source changes. On the 2026-11-25 upgrade the first ten were re-applied on top of `eb024cba`
 (one import line in `TournamentScheduler.scala` merged by hand; no change in behaviour); the other ten
 (`SecurityForm.scala`, `AuthUi.scala` and the eight `es-ES.xml` files) were added later the same day;
-`Feed.scala` and the four English-only files on 2026-11-26.
+`Feed.scala` and the four English-only files on 2026-11-26. On 2026-11-26 upstream `2fc00d8` was MERGED into this branch
+(no conflicts); upstream changed none of these files except `translation/dest/study/es-ES.xml` (a translation update
+removed one string), so the twenty-five changes are unchanged.
 
 ## Upstream versions
 
@@ -393,12 +400,12 @@ The deployment tracks the upstream Lichess repositories directly from
 github.com/lichess-org. For the exact upstream commit currently deployed,
 consult the docker-compose image tags in `docker/compose.yml`.
 
-Deployed since 2026-11-25: lila `eb024cba` (+ the modifications above), lila-ws image pinned by
-digest in `docker/compose-lila-ws-image.yml` (the 2026-11-22 upstream CI image, built from lila-ws
-`257e811`), lila-fishnet `3837bbc`, fishnet `2.15.1`, lila-docker upstream `f1e918c` merged with this
+Deployed since 2026-11-26: lila `2fc00d8` (+ the modifications above, merged), lila-ws image pinned by
+digest in `docker/compose-lila-ws-image.yml` (the 2026-11-25 upstream CI image, built from lila-ws
+`bee9229`). Since 2026-11-25: lila-fishnet `3837bbc`, fishnet `2.15.1`, lila-docker upstream `f1e918c` merged with this
 site's compose changes (`docker/*.upstream.diff`). Container images patched 2026-11-25 (security releases, same major versions): Caddy 2.11.9, Redis 8.2.11,
 MongoDB 7.0.48, Elasticsearch 7.17.28, lila-search 3.6.2, picfit 0.15.1 rebuilt with Go 1.26.11 (`docker/picfit.Dockerfile`). Before 2026-11-25: lila `f5b261e` (2026-10-08) and the
-2026-10-06 lila-ws image.
+2026-10-06 lila-ws image; from 2026-11-25 to 2026-11-26: lila `eb024cba` and the 2026-11-22 lila-ws image (built from `257e811`).
 
 ---
 

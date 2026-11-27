@@ -1,5 +1,5 @@
 diff --git a/compose-lila-ws-image.yml b/compose-lila-ws-image.yml
-index ea56905..c288f7b 100644
+index ea56905..cff11d5 100644
 --- a/compose-lila-ws-image.yml
 +++ b/compose-lila-ws-image.yml
 @@ -1,7 +1,8 @@
@@ -8,7 +8,7 @@ index ea56905..c288f7b 100644
    lila_ws:
 -    image: ghcr.io/lichess-org/lila-ws:latest
 +    # pinned 2026-10-08 to the build tested in staging (2026-10-06 CI image); bump deliberately, never via :latest
-+    image: ghcr.io/lichess-org/lila-ws@sha256:72403859ee5075c0cd9fab5a7a645a265979f9528294c7347f0fa34a0fa17e24
++    image: ghcr.io/lichess-org/lila-ws@sha256:bf067ef9eb485fe6761e5ae37c19adc2d2760b4b09e9f1a399b49d4ce286d7cf
      platform: linux/amd64
      restart: unless-stopped
      environment:
